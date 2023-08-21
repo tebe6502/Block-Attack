@@ -1,0 +1,10333 @@
+; ------------------------------------------------------------
+; Mad Pascal Compiler version 1.6.9 [2023/08/21] for 6502
+; ------------------------------------------------------------
+
+STACKWIDTH	= 16
+CODEORIGIN	= $0980
+
+TRUE		= 1
+FALSE		= 0
+
+; ------------------------------------------------------------
+
+	org $80
+
+zpage
+
+.if .def(@vbxe_detect)
+fxptr	.ds 2						; VBXE pointer
+.fi
+
+.if .def(@AllocMem)||.def(MAIN.SYSTEM.GETMEM)||.def(MAIN.SYSTEM.FREEMEM)
+psptr	.ds 2						; PROGRAMSTACK Pointer
+.fi
+
+bp	.ds 2
+bp2	.ds 2
+
+eax	.ds 4						;8 bytes (aex + edx) -> divREAL
+edx	.ds 4
+ecx	.ds 4
+
+TMP
+ztmp
+ztmp8	.ds 1
+ztmp9	.ds 1
+ztmp10	.ds 1
+ztmp11	.ds 1
+
+STACKORIGIN	.ds STACKWIDTH*4
+zpend
+
+; ------------------------------------------------------------
+
+ax	= eax
+al	= eax
+ah	= eax+1
+
+cx	= ecx
+cl	= ecx
+ch	= ecx+1
+
+dx	= edx
+dl	= edx
+dh	= edx+1
+
+	org eax
+
+FP1MAN0	.ds 1
+FP1MAN1	.ds 1
+FP1MAN2	.ds 1
+FP1MAN3	.ds 1
+
+	org ztmp8
+
+FP1SGN	.ds 1
+FP1EXP	.ds 1
+
+	org edx
+
+FP2MAN0	.ds 1
+FP2MAN1	.ds 1
+FP2MAN2	.ds 1
+FP2MAN3	.ds 1
+
+	org ztmp10
+
+FP2SGN	.ds 1
+FP2EXP	.ds 1
+
+	org ecx
+
+FPMAN0	.ds 1
+FPMAN1	.ds 1
+FPMAN2	.ds 1
+FPMAN3	.ds 1
+
+	org bp2
+
+FPSGN	.ds 1
+FPEXP	.ds 1
+
+	.ifdef MAIN.@DEFINES.BASICOFF
+	org CODEORIGIN
+	icl 'atari\basicoff.asm'
+	ini CODEORIGIN
+	.fi
+
+	.ifdef MAIN.@DEFINES.S_VBXE
+	opt h-
+	ins 'atari\s_vbxe\sdxld2.obx'
+	opt h+
+	.fi
+
+	org CODEORIGIN
+
+.local	MAIN.@RESOURCE
+.endl
+
+.local	RESOURCE
+	icl 'atari\resource.asm'
+	?EXTDETECT = 0
+	?VBXDETECT = 0
+
+	SAPRPLAY '' SAPR_PLAYER 0 0 0 0 0 0 0 0
+.endl
+
+; ------------------------------------------------------------
+
+	org CODEORIGIN
+
+	STATICDATA
+
+; ------------------------------------------------------------
+
+RTLIB
+	icl 'rtl6502_a8.asm'
+
+.print 'ZPAGE: ',zpage,'..',zpend-1
+
+.print 'RTBUF: ',@buf,'..',@buf+255
+
+.print 'RTLIB: ',RTLIB,'..',*-1
+
+; ------------------------------------------------------------
+
+START
+	tsx
+	stx MAIN.@halt+1
+
+VLEN	= VARDATASIZE-VARINITSIZE
+VADR	= DATAORIGIN+VARINITSIZE
+
+	ift VADR > $BFFF
+	ert 'Invalid memory address range ',VADR
+	eli (VLEN > 0) && (VLEN <= 256)
+	ldx #256-VLEN
+	lda #$00
+	sta:rne VADR+VLEN-256,x+
+	eli VLEN>256
+	m@init
+	eif
+
+.ifdef psptr
+	mwa #PROGRAMSTACK psptr
+.fi
+
+	.ifdef MAIN.@DEFINES.ROMOFF
+	icl 'atari\romoff.asm'
+	.fi
+
+	ldx #$0F					; DOS II+/D ParamStr
+	mva:rpl $340,x MAIN.IOCB@COPY,x-
+
+	inx						; X = 0
+	stx bp						; BP = 0
+
+	stx audctl					; reset POKEY
+	stx audctl+$10
+	lda #3
+	sta skctl
+	sta skctl+$10
+
+	dex						; X = 255
+
+	UNITINITIALIZATION
+
+.local	MAIN						; PROCEDURE
+
+	jmp l_00F9
+
+; ------------------------------------------------------------
+
+.local	SYSTEM						; UNIT
+
+.local	STR_0133					; PROCEDURE | ASSEMBLER | OVERLOAD
+
+; ------------------------------------------------------------
+
+; Generate Assignment for CARDINAL / INTEGER / REAL / SINGLE
+; as Pointer
+	lda :STACKORIGIN,x
+	sta A
+	lda :STACKORIGIN+STACKWIDTH,x
+	sta A+1
+	lda :STACKORIGIN+STACKWIDTH*2,x
+	sta A+2
+	lda :STACKORIGIN+STACKWIDTH*3,x
+	sta A+3
+	dex
+	jmi @main
+
+; ------------------------------------------------------------
+
+; Generate Assignment for WORD / SMALLINT / SHORTREAL / POINTER
+; as Pointer
+	lda :STACKORIGIN,x
+	sta S
+	lda :STACKORIGIN+STACKWIDTH,x
+	sta S+1
+	dex
+@main
+
+; -------------------  ASM Block 00000023  -------------------
+
+	txa:pha
+
+	inx		; parameter A
+	inx		; parameter S
+
+	@ValueToStr #@printCARD
+
+	@buf2str s	; !!! koniecznie przez wskaznik
+
+	pla:tax
+
+; ------------------------------------------------------------
+
+A	= DATAORIGIN+$000B
+S	= DATAORIGIN+$000F
+
+@VarData	= A
+@VarDataSize	= 6
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	POKE						; PROCEDURE | ASSEMBLER | REGISTER
+
+; ------------------------------------------------------------
+
+; Generate Assignment for WORD / SMALLINT / SHORTREAL / POINTER
+; as Pointer
+	lda :STACKORIGIN,x
+	sta A
+	lda :STACKORIGIN+STACKWIDTH,x
+	sta A+1
+	dex
+	jmi @main
+
+; ------------------------------------------------------------
+
+; Generate Assignment for BYTE / CHAR / SHORTINT / BOOLEAN
+; as Pointer
+	lda :STACKORIGIN,x
+	sta VALUE
+	dex
+@main
+
+; -------------------  ASM Block 00000024  -------------------
+
+	ldy #0
+	mva value (:edx),y
+
+; ------------------------------------------------------------
+
+A	= :EDX
+VALUE	= :ECX
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	FILLCHAR_0141					; PROCEDURE | ASSEMBLER | OVERLOAD | REGISTER | INLINE
+
+	.MACRO m@INLINE
+
+; -------------------  ASM Block 00000027  -------------------
+
+	jsr @fill
+
+	.ENDM
+
+; ------------------------------------------------------------
+
+A	= :EDX
+COUNT	= :ECX
+VALUE	= :EAX
+@exit
+.endl
+
+.local	FILLCHAR_0142					; PROCEDURE | ASSEMBLER | OVERLOAD | REGISTER | INLINE
+
+	.MACRO m@INLINE
+
+; -------------------  ASM Block 00000030  -------------------
+
+	jsr @fill
+
+	.ENDM
+
+; ------------------------------------------------------------
+
+A	= :EDX
+COUNT	= :ECX
+VALUE	= :EAX
+@exit
+.endl
+
+.local	MOVE_0143					; PROCEDURE | ASSEMBLER | OVERLOAD | REGISTER | INLINE
+
+	.MACRO m@INLINE
+
+; -------------------  ASM Block 00000033  -------------------
+
+	jsr @move
+
+	.ENDM
+
+; ------------------------------------------------------------
+
+SOURCE	= :EDX
+DEST	= :ECX
+COUNT	= :EAX
+@exit
+.endl
+
+.local	MOVE_0144					; PROCEDURE | ASSEMBLER | OVERLOAD | REGISTER | INLINE
+
+	.MACRO m@INLINE
+
+; -------------------  ASM Block 00000035  -------------------
+
+	jsr @move
+
+	.ENDM
+
+; ------------------------------------------------------------
+
+SOURCE	= :EDX
+DEST	= :ECX
+COUNT	= :EAX
+@exit
+.endl
+
+.local	PAUSE_016D					; PROCEDURE | ASSEMBLER | OVERLOAD
+
+; -------------------  ASM Block 00000042  -------------------
+
+	lda:cmp:req :rtclok+2
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	PAUSE_016E					; PROCEDURE | ASSEMBLER | OVERLOAD
+
+; -------------------  ASM Block 00000043  -------------------
+
+
+loop	lda n
+	ora n+1
+	beq stop
+
+	lda:cmp:req :rtclok+2
+
+	dew n
+
+	jmp loop
+stop
+
+
+; ------------------------------------------------------------
+
+N	= DATAORIGIN+$0011
+
+@VarData	= N
+@VarDataSize	= 2
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	RANDOMIZE					; PROCEDURE | ASSEMBLER
+
+; -------------------  ASM Block 00000044  -------------------
+
+
+  mva $d20a RndSeed
+  mva #$00  RndSeed+1
+
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	RANDOM_0170					; FUNCTION | ASSEMBLER | OVERLOAD
+	sta RANGE
+
+; -------------------  ASM Block 00000048  -------------------
+
+
+;BYTE FUNC Rand(BYTE range)
+; returns random number between 0 and
+; range-1.  If range=0, then a random
+; number between 0 and 255 is returned
+
+  ldy $d20a   ; RANDOM
+
+  lda range
+  beq stop
+
+  sta :ecx
+  sty :eax
+
+  jsr imulCL
+  tay
+
+stop  sty Result
+
+
+@exit
+
+; ------------------------------------------------------------
+
+RANGE	= DATAORIGIN+$0013
+RESULT	= DATAORIGIN+$0014
+
+@VarData	= RANGE
+@VarDataSize	= 1
+
+	rts						; ret
+.endl
+
+; ------------------------------------------------------------
+
+__PORTB_BANKS	= $0101
+M_PI_2	= $0648
+D_PI_2	= $0192
+D_PI_180	= $04
+MGTIA	= $00
+MVBXE	= $80
+VBXE_XDLADR	= $00
+VBXE_BCBTMP	= $E0
+VBXE_BCBADR	= $0100
+VBXE_MAPADR	= $1000
+VBXE_CHBASE	= $1000
+VBXE_OVRADR	= $5000
+VBXE_WINDOW	= $B000
+IDLI	= $00
+IVBL	= $01
+IVBLD	= $01
+IVBLI	= $02
+ITIM1	= $03
+ITIM2	= $04
+ITIM4	= $05
+CH_DELCHR	= $FE
+CH_ENTER	= $9B
+CH_ESC	= $1B
+CH_CURS_UP	= $1C
+CH_CURS_DOWN	= $1D
+CH_CURS_LEFT	= $1E
+CH_CURS_RIGHT	= $1F
+CH_TAB	= $7F
+CH_EOL	= $9B
+CH_CLR	= $7D
+CH_BELL	= $FD
+CH_DEL	= $7E
+CH_DELLINE	= $9C
+CH_INSLINE	= $9D
+PAL_PMCOLOR0	= $00
+PAL_PMCOLOR1	= $01
+PAL_PMCOLOR2	= $02
+PAL_PMCOLOR3	= $03
+PAL_COLOR0	= $04
+PAL_COLOR1	= $05
+PAL_COLOR2	= $06
+PAL_COLOR3	= $07
+PAL_COLBAK	= $08
+COLOR_BLACK	= $00
+COLOR_WHITE	= $0E
+COLOR_RED	= $32
+COLOR_CYAN	= $96
+COLOR_VIOLET	= $68
+COLOR_GREEN	= $C4
+COLOR_BLUE	= $74
+COLOR_YELLOW	= $EE
+COLOR_ORANGE	= $28
+COLOR_BROWN	= $E4
+COLOR_LIGHTRED	= $3C
+COLOR_GRAY1	= $04
+COLOR_GRAY2	= $06
+COLOR_GRAY3	= $0A
+COLOR_LIGHTGREEN	= $CC
+COLOR_LIGHTBLUE	= $7C
+FMOPENREAD	= $04
+FMOPENWRITE	= $08
+FMOPENAPPEND	= $09
+FMOPENREADWRITE	= $0C
+SCREENWIDTH	= DATAORIGIN+$0000
+SCREENHEIGHT	= DATAORIGIN+$0002
+DATESEPARATOR	= DATAORIGIN+$0004
+RND	= $D20A
+adr.PALETTE	= $02C0
+.var PALETTE	= adr.PALETTE .word
+adr.HPALETTE	= $D012
+.var HPALETTE	= adr.HPALETTE .word
+FILEMODE	= DATAORIGIN+$0005
+GRAPHMODE	= DATAORIGIN+$0006
+IORESULT	= DATAORIGIN+$0007
+EOLN	= DATAORIGIN+$0008
+RNDSEED	= DATAORIGIN+$0009
+
+.endl							; UNIT SYSTEM
+
+; ------------------------------------------------------------
+
+.local	ATARI						; UNIT
+
+; ------------------------------------------------------------
+
+IRQENS	= $10
+RTCLOK	= $12
+RTCLOK1	= $12
+RTCLOK2	= $13
+RTCLOK3	= $14
+ATRACT	= $4D
+LMARGIN	= $52
+RMARGIN	= $53
+ROWCRS	= $54
+COLCRS	= $55
+DINDEX	= $57
+SAVMSC	= $58
+PALNTS	= $62
+RAMTOP	= $6A
+VDSLST	= $0200
+SDLSTL	= $0230
+TXTROW	= $0290
+TXTCOL	= $0291
+TINDEX	= $0293
+TXTMSC	= $0294
+SDMCTL	= $022F
+GPRIOR	= $026F
+CRSINH	= $02F0
+CHACT	= $02F3
+CHBAS	= $02F4
+CH	= $02FC
+FILDAT	= $02FD
+PCOLR0	= $02C0
+PCOLR1	= $02C1
+PCOLR2	= $02C2
+PCOLR3	= $02C3
+COLOR0	= $02C4
+COLOR1	= $02C5
+COLOR2	= $02C6
+COLOR3	= $02C7
+COLOR4	= $02C8
+COLBAKS	= $02C8
+HPOSP0	= $D000
+HPOSP1	= $D001
+HPOSP2	= $D002
+HPOSP3	= $D003
+HPOSM0	= $D004
+HPOSM1	= $D005
+HPOSM2	= $D006
+HPOSM3	= $D007
+SIZEP0	= $D008
+SIZEP1	= $D009
+SIZEP2	= $D00A
+SIZEP3	= $D00B
+SIZEM	= $D00C
+GRAFP0	= $D00D
+GRAFP1	= $D00E
+GRAFP2	= $D00F
+GRAFP3	= $D010
+GRAFM	= $D011
+P0PF	= $D004
+PAL	= $D014
+TRIG3	= $D013
+COLPM0	= $D012
+COLPM1	= $D013
+COLPM2	= $D014
+COLPM3	= $D015
+COLPF0	= $D016
+COLPF1	= $D017
+COLPF2	= $D018
+COLPF3	= $D019
+COLBK	= $D01A
+PRIOR	= $D01B
+GRACTL	= $D01D
+HITCLR	= $D01E
+CONSOL	= $D01F
+AUDF1	= $D200
+AUDC1	= $D201
+AUDF2	= $D202
+AUDC2	= $D203
+AUDF3	= $D204
+AUDC3	= $D205
+AUDF4	= $D206
+AUDC4	= $D207
+AUDCTL	= $D208
+KBCODE	= $D209
+IRQEN	= $D20E
+SKSTAT	= $D20F
+PORTA	= $D300
+PORTB	= $D301
+PACTL	= $D302
+DMACTL	= $D400
+CHACTL	= $D401
+DLISTL	= $D402
+HSCROL	= $D404
+VSCROL	= $D405
+PMBASE	= $D407
+CHBASE	= $D409
+WSYNC	= $D40A
+VCOUNT	= $D40B
+PENH	= $D40C
+PENV	= $D40D
+NMIEN	= $D40E
+NMIVEC	= $FFFA
+RESETVEC	= $FFFC
+IRQVEC	= $FFFE
+
+.endl							; UNIT ATARI
+
+; ------------------------------------------------------------
+
+.local	CRT						; UNIT
+
+.local	KEYPRESSED					; FUNCTION | ASSEMBLER
+
+; -------------------  ASM Block 00000062  -------------------
+
+	ldy #$00	; false
+	lda kbcodes
+	cmp #$ff
+	seq
+	iny		; true
+	sty Result
+
+@exit
+
+; ------------------------------------------------------------
+
+RESULT	= DATAORIGIN+$0016
+	rts						; ret
+.endl
+
+; ------------------------------------------------------------
+
+TEXTATTR	= DATAORIGIN+$0015
+CONSOL	= $D01F
+CN_START_SELECT_OPTION	= $00
+CN_SELECT_OPTION	= $01
+CN_START_OPTION	= $02
+CN_OPTION	= $03
+CN_START_SELECT	= $04
+CN_SELECT	= $05
+CN_START	= $06
+CN_NONE	= $07
+BW40	= $00
+CO40	= $01
+BW80	= $02
+CO80	= $03
+MONO	= $07
+C40	= $01
+C80	= $03
+BLACK	= $00
+WHITE	= $0F
+RED	= $26
+CYAN	= $AC
+PURPLE	= $48
+GREEN	= $B6
+BLUE	= $86
+YELLOW	= $DC
+ORANGE	= $18
+BROWN	= $F4
+LIGHT_RED	= $2A
+DARK_GREY	= $04
+GREY	= $08
+LIGHT_GREEN	= $BC
+LIGHT_BLUE	= $9A
+LIGHT_GREY	= $0C
+BLINK	= $80
+
+.endl							; UNIT CRT
+
+; ------------------------------------------------------------
+
+.local	DOS						; UNIT
+
+; ------------------------------------------------------------
+
+PALNTSC	= $D014
+
+.endl							; UNIT DOS
+
+; ------------------------------------------------------------
+
+.local	STRUTILS					; UNIT
+
+; ------------------------------------------------------------
+
+.endl							; UNIT STRUTILS
+
+; ------------------------------------------------------------
+
+.local	SYSUTILS					; UNIT
+
+.local	BYTETOSTR					; FUNCTION | ASSEMBLER
+	sta A
+
+; -------------------  ASM Block 00000079  -------------------
+
+	txa:pha
+
+	lda a
+	ldy #$2f
+	ldx #$3a
+	sec
+@	iny
+	sbc #100
+	bcs @-
+@	dex
+	adc #10
+	bmi @-
+	adc #$2f
+
+	sta adr.Result+3
+	stx adr.Result+2
+	sty adr.Result+1
+
+	ldy #3
+lp	cpy #1
+	beq skp
+	lda adr.Result+1
+	cmp #$30
+	bne skp
+
+	lda adr.Result+2
+	sta adr.Result+1
+	lda adr.Result+3
+	sta adr.Result+2
+
+	dey
+	bne lp
+
+skp	sty adr.Result
+
+	pla:tax
+
+@exit
+
+; ------------------------------------------------------------
+
+A	= DATAORIGIN+$0017
+adr.RESULT	= [DATAORIGIN+$0018] .array [33]
+.var RESULT	= adr.RESULT .word
+
+@VarData	= A
+@VarDataSize	= 34
+
+	rts						; ret
+.endl
+
+; ------------------------------------------------------------
+
+FAREADONLY	= $01
+FAHIDDEN	= $02
+FASYSFILE	= $04
+FAVOLUMEID	= $08
+FADIRECTORY	= $10
+FAARCHIVE	= $20
+FAANYFILE	= $3F
+
+.endl							; UNIT SYSUTILS
+
+; ------------------------------------------------------------
+
+.local	JGP2						; UNIT
+
+.local	JGPDLI						; PROCEDURE | ASSEMBLER | INTERRUPT
+
+; -------------------  ASM Block 00000089  -------------------
+
+	pha
+
+	lda #0
+.def	:JGPCharset = *-1
+
+	inc dliCnt	; cycle latency
+
+	sta chbase
+
+	eor #4
+.def	:JGPEor = *-1
+	sta JGPCharset
+
+	lda #0
+.def	:dliCnt = *-1
+	add cntRow
+
+	bpl skp
+
+	lda #6
+	sta colpf1
+	lda #4
+	sta colpf2
+
+skp
+	pla
+
+	rti						; ret
+.endl
+
+.local	DLPOKE						; PROCEDURE
+	sta B
+
+; optimize OK (JGP2), line = 73
+
+	ldy DLIST+1
+	sty :bp+1
+	ldy DLIST
+	lda B
+	sta (:bp),y
+
+; optimize FAIL (0, JGP2), line = 74
+
+	inc DLIST
+	sne
+	inc DLIST+1
+
+; ------------------------------------------------------------
+
+B	= DATAORIGIN+$003F
+
+@VarData	= B
+@VarDataSize	= 1
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	DLPOKEW						; PROCEDURE
+
+; optimize OK (JGP2), line = 79
+
+	ldy DLIST+1
+	sty :bp+1
+	ldy DLIST
+	lda W
+	sta (:bp),y
+
+; optimize OK (JGP2), line = 80
+
+	lda W+1
+	mwy DLIST :bp2
+	ldy #$01
+	sta (:bp2),y
+
+; optimize OK (JGP2), line = 81
+
+	lda DLIST
+	add #$02
+	sta DLIST
+	scc
+	inc DLIST+1
+
+; ------------------------------------------------------------
+
+W	= DATAORIGIN+$0040
+
+@VarData	= W
+@VarDataSize	= 2
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	BUILDDISPLAYLIST				; PROCEDURE
+
+; optimize OK (JGP2), line = 88
+
+	lda DLISTADDRESS
+	sta DLIST
+	lda DLISTADDRESS+1
+	sta DLIST+1
+
+; --- WhileProlog
+	jmp l_01E7
+l_01E8
+
+; optimize OK (JGP2), line = 90
+
+	lda #$F0
+	jsr DLPOKE
+
+; optimize FAIL (0, JGP2), line = 91
+
+	dec BLANKS
+l_01E7
+
+; optimize OK (JGP2), line = 89
+
+	lda BLANKS
+	jne l_01E8
+
+; optimize OK (JGP2), line = 94
+
+	dec LINES
+
+; optimize OK (JGP2), line = 96
+
+	lda #$E4
+	jsr DLPOKE
+
+; optimize OK (JGP2), line = 97
+
+	lda VRAMADDRESS
+	sta DLPOKEW.W
+	lda VRAMADDRESS+1
+	sta DLPOKEW.W+1
+	jsr DLPOKEW
+
+; --- WhileProlog
+	jmp l_020B
+l_020C
+
+; optimize OK (JGP2), line = 100
+
+	lda #$A4
+	jsr DLPOKE
+
+; optimize FAIL (0, JGP2), line = 102
+
+	dec LINES
+l_020B
+
+; optimize OK (JGP2), line = 99
+
+	lda LINES
+	jne l_020C
+
+; optimize OK (JGP2), line = 104
+
+	lda #$04
+	jsr DLPOKE
+
+; optimize OK (JGP2), line = 106
+
+	lda #$41
+	jsr DLPOKE
+
+; optimize OK (JGP2), line = 107
+
+	lda DLISTADDRESS
+	sta DLPOKEW.W
+	lda DLISTADDRESS+1
+	sta DLPOKEW.W+1
+	jsr DLPOKEW
+
+; ------------------------------------------------------------
+
+DLISTADDRESS	= DATAORIGIN+$0042
+VRAMADDRESS	= DATAORIGIN+$0044
+LINES	= DATAORIGIN+$0046
+BLANKS	= DATAORIGIN+$0047
+
+@VarData	= DLISTADDRESS
+@VarDataSize	= 6
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	JGPINIT						; PROCEDURE
+
+; optimize OK (JGP2), line = 112
+
+	lda DLISTADDRESS
+	sta BUILDDISPLAYLIST.DLISTADDRESS
+	lda DLISTADDRESS+1
+	sta BUILDDISPLAYLIST.DLISTADDRESS+1
+	lda VRAMADDRESS
+	sta BUILDDISPLAYLIST.VRAMADDRESS
+	lda VRAMADDRESS+1
+	sta BUILDDISPLAYLIST.VRAMADDRESS+1
+	lda LINES
+	sta BUILDDISPLAYLIST.LINES
+	lda BLANKS
+	sta BUILDDISPLAYLIST.BLANKS
+	jsr BUILDDISPLAYLIST
+
+; optimize OK (JGP2), line = 113
+
+	lda DLISTADDRESS
+	sta ATARI.SDLSTL
+	lda DLISTADDRESS+1
+	sta ATARI.SDLSTL+1
+
+; optimize OK (JGP2), line = 114
+
+	lda VRAMADDRESS
+	sta ATARI.SAVMSC
+	lda VRAMADDRESS+1
+	sta ATARI.SAVMSC+1
+
+; optimize OK (JGP2), line = 115
+
+	mva <JGPDLI VDSLST
+	mva >JGPDLI VDSLST+1
+
+; optimize OK (JGP2), line = 116
+
+	lda #$C0
+	sta ATARI.NMIEN
+
+; ------------------------------------------------------------
+
+DLISTADDRESS	= DATAORIGIN+$0048
+VRAMADDRESS	= DATAORIGIN+$004A
+LINES	= DATAORIGIN+$004C
+BLANKS	= DATAORIGIN+$004D
+
+@VarData	= DLISTADDRESS
+@VarDataSize	= 6
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+; ------------------------------------------------------------
+
+DL_BLANK8	= $70
+DL_DLI	= $80
+DL_LMS	= $40
+DL_VSCROLL	= $20
+DL_HSCROLL	= $10
+DL_MODE	= $04
+DL_JVB	= $41
+DLIST	= DATAORIGIN+$0039
+
+.endl							; UNIT JGP2
+
+; ------------------------------------------------------------
+
+.local	JOYSTICK					; UNIT
+
+.local	PADDLE0						; FUNCTION | ASSEMBLER
+
+; -------------------  ASM Block 00000090  -------------------
+
+	ldy pot0
+
+	lda allpot
+	and #1
+	sne
+
+	dta $2c		; bit*
+	ldy #1
+	sty Result
+
+	sta potgo
+
+@exit
+
+; ------------------------------------------------------------
+
+RESULT	= DATAORIGIN+$004E
+	rts						; ret
+.endl
+
+.local	FIRE2						; FUNCTION
+
+	jsr PADDLE0
+
+; -------------------  ASM Block 00000091  -------------------
+
+	cpy #$e4
+	beq pressed
+
+	lda exists: #$00
+	ora #$02
+	sta exists
+
+	lda #0
+	beq setvol
+pressed
+	lda exists
+	and #$02
+	beq next
+
+	lda vol_b1: #$00
+	bne decay
+	lda #$8f
+	bne setvol
+decay
+	cmp #$f
+	bcc next
+	sbc #1
+setvol
+	sta vol_b1
+next
+	lda vol_b1
+	sta Result
+ 
+@exit
+
+; ------------------------------------------------------------
+
+RESULT	= DATAORIGIN+$004F
+	rts						; ret
+.endl
+
+; ------------------------------------------------------------
+
+JOY_NONE	= $0F
+JOY_UP	= $0E
+JOY_DOWN	= $0D
+JOY_LEFT	= $0B
+JOY_LEFT_UP	= $0A
+JOY_LEFT_DOWN	= $09
+JOY_RIGHT	= $07
+JOY_RIGHT_UP	= $06
+JOY_RIGHT_DOWN	= $05
+JOY_1	= $0278
+JOY_2	= $0279
+adr.STICK	= $0278
+.var STICK	= adr.STICK .word
+STICK0	= $0278
+STICK1	= $0279
+adr.STRIG	= $0284
+.var STRIG	= adr.STRIG .word
+STRIG0	= $0284
+STRIG1	= $0285
+adr.PADDL	= $0270
+.var PADDL	= adr.PADDL .word
+PADDL0	= $0270
+PADDL1	= $0271
+PADDL2	= $0272
+PADDL3	= $0273
+PADDL4	= $0274
+PADDL5	= $0275
+PADDL6	= $0276
+PADDL7	= $0277
+adr.PTRIG	= $027C
+.var PTRIG	= adr.PTRIG .word
+PTRIG0	= $027C
+PTRIG1	= $027D
+PTRIG2	= $027E
+PTRIG3	= $027F
+PTRIG4	= $0280
+PTRIG5	= $0281
+PTRIG6	= $0282
+PTRIG7	= $0283
+TRIG0	= $D010
+TRIG1	= $D011
+POT0	= $D200
+ALLPOT	= $D208
+POTGO	= $D20B
+
+.endl							; UNIT JOYSTICK
+
+; ------------------------------------------------------------
+
+.local	TYPES						; UNIT
+
+; ------------------------------------------------------------
+
+.endl							; UNIT TYPES
+
+; ------------------------------------------------------------
+
+.local	GRAPH						; UNIT
+
+; ------------------------------------------------------------
+
+CURRENTDRIVER	= $80
+DETECT	= $00
+CGA	= $01
+MCGA	= $02
+EGA	= $03
+EGA64	= $04
+EGAMONO	= $05
+LOWRES	= $06
+HERCMONO	= $07
+VGA	= $09
+VESA	= $0A
+D1BIT	= $0B
+D2BIT	= $0C
+D4BIT	= $0D
+D6BIT	= $0E
+D8BIT	= $0F
+D12BIT	= $10
+M640X400	= $18
+M640X480	= $18
+GROK	= $01
+GRNOINITGRAPH	= $FF
+GRNOTDETECTED	= $FE
+GRFILENOTFOUND	= $FD
+GRINVALIDDRIVER	= $FC
+GRNOLOADMEM	= $FB
+GRNOSCANMEM	= $FA
+GRNOFLOODMEM	= $F9
+GRFONTNOTFOUND	= $F8
+GRNOFONTMEM	= $F7
+GRINVALIDMODE	= $F6
+GRERROR	= $F5
+GRIOERROR	= $F4
+GRINVALIDFONT	= $F3
+GRINVALIDFONTNUM	= $F2
+GRINVALIDVERSION	= $EE
+CGAC0	= $00
+CGAC1	= $01
+CGAC2	= $02
+CGAC3	= $03
+CGAHI	= $04
+MCGAC0	= $00
+MCGAC1	= $01
+MCGAC2	= $02
+MCGAC3	= $03
+MCGAMED	= $04
+MCGAHI	= $05
+EGALO	= $00
+EGAHI	= $01
+EGA64LO	= $00
+EGA64HI	= $01
+EGAMONOHI	= $03
+VGALO	= $0A
+VGAMED	= $1F
+VGAHI	= $18
+WIN_LEFT	= DATAORIGIN+$0050
+WIN_RIGHT	= DATAORIGIN+$0052
+WIN_TOP	= DATAORIGIN+$0054
+WIN_BOTTOM	= DATAORIGIN+$0056
+GRAPHRESULT	= DATAORIGIN+$0058
+GETCOLOR	= DATAORIGIN+$0059
+VIDEORAM	= DATAORIGIN+$005A
+adr.LASTARCCOORDS	= DATAORIGIN+$005C	; [12] RECORD
+.var LASTARCCOORDS	= adr.LASTARCCOORDS .word
+LASTARCCOORDS.X	= DATAORIGIN+$005C
+LASTARCCOORDS.Y	= DATAORIGIN+$005E
+LASTARCCOORDS.XSTART	= DATAORIGIN+$0060
+LASTARCCOORDS.YSTART	= DATAORIGIN+$0062
+LASTARCCOORDS.XEND	= DATAORIGIN+$0064
+LASTARCCOORDS.YEND	= DATAORIGIN+$0066
+SCANLINE_WIDTH	= DATAORIGIN+$0068
+CURRENTX	= DATAORIGIN+$0069
+CURRENTY	= DATAORIGIN+$006B
+
+.endl							; UNIT GRAPH
+
+; ------------------------------------------------------------
+
+.local	ZX5						; UNIT
+
+.local	UNZX5_02A4					; PROCEDURE | ASSEMBLER | OVERLOAD
+
+; -------------------  ASM Block 00000119  -------------------
+
+ZX5_OUTPUT      equ :EAX+0
+copysrc         equ :EAX+2
+offset          equ :EAX+4
+offset2         equ :EAX+6
+offset3         equ :EAX+8
+len             equ :EAX+$A
+pnb             equ :EAX+$C
+
+unZX5		stx @sp
+
+		mwa inputPointer ZX5_INPUT
+		mwa outputPointer ZX5_OUTPUT
+
+		lda   #$ff
+		sta   offset
+		sta   offset+1
+		ldy   #$00
+		sty   len
+		sty   len+1
+		lda   #$80
+
+dzx5s_literals
+		jsr   dzx5s_elias
+		pha
+cop0		jsr   _GET_BYTE
+		ldy   #$00
+		sta   (ZX5_OUTPUT),y
+		inw   ZX5_OUTPUT
+		lda   len
+		bne   @+
+		dec   len+1
+@		dec   len
+		bne   cop0
+		lda   len+1
+		bne   cop0
+		pla
+		asl   @
+		bcs   dzx5s_other_offset
+
+dzx5s_last_offset
+		jsr   dzx5s_elias
+dzx5s_copy	pha
+		lda   ZX5_OUTPUT
+		clc
+		adc   offset
+		sta   copysrc
+		lda   ZX5_OUTPUT+1
+		adc   offset+1
+		sta   copysrc+1
+		ldy   #$00
+		ldx   len+1
+		beq   Remainder
+Page		lda   (copysrc),y
+		sta   (ZX5_OUTPUT),y
+		iny
+		bne   Page
+		inc   copysrc+1
+		inc   ZX5_OUTPUT+1
+		dex
+		bne   Page
+Remainder	ldx   len
+		beq   copyDone
+copyByte	lda   (copysrc),y
+		sta   (ZX5_OUTPUT),y
+		iny
+		dex
+		bne   copyByte
+		tya
+		clc
+		adc   ZX5_OUTPUT
+		sta   ZX5_OUTPUT
+		bcc   copyDone
+		inc   ZX5_OUTPUT+1
+copyDone	stx   len+1
+		stx   len
+		pla
+		asl   @
+		bcc   dzx5s_literals
+
+dzx5s_other_offset
+		asl   @
+		bne   dzx5s_other_offset_skip
+		jsr   _GET_BYTE
+		sec	; można usunąć jeśli dekompresja z pamięci a nie pliku
+		rol   @
+dzx5s_other_offset_skip
+		bcc   dzx5s_prev_offset
+
+dzx5s_new_offset
+		sta   pnb
+		asl   @
+		ldx   offset2
+		stx   offset3
+		ldx   offset2+1
+		stx   offset3+1
+		ldx   offset
+		stx   offset2
+		ldx   offset+1
+		stx   offset2+1
+		ldx   #$fe
+		stx   len
+		jsr   dzx5s_elias_loop
+		pha
+		ldx   len
+		inx
+		stx   offset+1
+		bne   @+
+		pla
+
+		jmp to_exit	; koniec
+
+@		jsr   _GET_BYTE
+		sta   offset
+		ldx   #$00
+		stx   len+1
+		inx
+		stx   len
+		pla
+		dec   pnb
+		bmi   @+
+		jsr   dzx5s_elias_backtrack
+@		inw   len
+		jmp   dzx5s_copy
+
+dzx5s_prev_offset
+		asl   @
+		bcc   dzx5s_second_offset
+		ldy   offset2
+		ldx   offset3
+		sty   offset3
+		stx   offset2
+		ldy   offset2+1
+		ldx   offset3+1
+		sty   offset3+1
+		stx   offset2+1
+
+dzx5s_second_offset
+		ldy   offset2
+		ldx   offset
+		sty   offset
+		stx   offset2
+		ldy   offset2+1
+		ldx   offset+1
+		sty   offset+1
+		stx   offset2+1
+		jmp   dzx5s_last_offset
+
+dzx5s_elias	inc   len
+dzx5s_elias_loop
+		asl   @
+		bne   dzx5s_elias_skip
+		jsr   _GET_BYTE
+		sec	; można usunąć jeśli dekompresja z pamięci a nie pliku
+		rol   @
+dzx5s_elias_skip
+		bcc   dzx5s_elias_backtrack
+		rts
+
+dzx5s_elias_backtrack
+		asl   @
+		rol   len
+		rol   len+1
+		jmp   dzx5s_elias_loop
+
+_GET_BYTE	lda    $ffff
+ZX5_INPUT	equ    *-2
+		inw    ZX5_INPUT
+		rts
+
+to_exit		ldx #0
+@sp		equ *-1
+
+; ------------------------------------------------------------
+
+INPUTPOINTER	= DATAORIGIN+$006D
+OUTPUTPOINTER	= DATAORIGIN+$006F
+
+@VarData	= INPUTPOINTER
+@VarDataSize	= 4
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+; ------------------------------------------------------------
+
+.endl							; UNIT ZX5
+
+; ------------------------------------------------------------
+
+.local	MISC						; UNIT
+
+.local	DETECTANTIC					; FUNCTION | ASSEMBLER
+
+; -------------------  ASM Block 00000120  -------------------
+
+
+// ANTIC PAL Test for Atari 8-bits
+// (C) 2019 Guillermo Fuenzalida
+
+antic_loop1
+	lda vcount
+	cmp #100
+	bcc antic_loop1		// wait till scanline 200
+	sta scanline
+antic_loop2
+	lda vcount
+	cmp #10
+	bmi antic_loop2_fin
+	cmp scanline
+	bmi antic_loop2
+	sta scanline
+	bpl antic_loop2
+
+antic_loop2_fin
+	ldy #$00
+	lda #0
+scanline equ *-1
+	cmp #135
+	bmi ntsc
+	iny
+ntsc
+	sty Result
+
+
+@exit
+
+; ------------------------------------------------------------
+
+RESULT	= DATAORIGIN+$0071
+	rts						; ret
+.endl
+
+.local	DETECTSTEREO					; FUNCTION | ASSEMBLER
+
+; -------------------  ASM Block 00000124  -------------------
+
+	txa:pha
+
+	ldx #$00
+	stx $d20f	;halt pokey 0
+	stx $d21f	;halt pokey 1
+	ldy #$03
+	sty $d21f	;release pokey 1
+
+	sta $d40a	;delay necessary for
+	sta $d40a	;accelerator boards
+
+	lda #$ff
+loop	and $d20a	;see if pokey 0 is halted ($d20a = $ff)
+	inx
+	bne loop
+
+	sty $d20f
+
+	cmp #$ff
+	bne mono
+
+	inx
+mono
+	stx Result
+
+	pla:tax
+
+@exit
+
+; ------------------------------------------------------------
+
+RESULT	= DATAORIGIN+$0072
+	rts						; ret
+.endl
+
+.local	DETECTCPU					; FUNCTION | ASSEMBLER
+
+; -------------------  ASM Block 00000125  -------------------
+
+	txa:pha
+
+	opt c+
+
+;detekcja zainstalowanego procesora
+	lda #$99
+	clc
+	sed
+	adc #$01
+	cld
+	beq DetectCPU_CMOS
+
+DetectCPU_02
+	lda #0
+	jmp stop
+
+DetectCPU_CMOS
+	lda #0
+	rep #%00000010		;wyzerowanie bitu Z
+	bne DetectCPU_C816
+
+DetectCPU_C02
+	lda #1
+	jmp stop
+
+DetectCPU_C816
+	lda #$80
+
+stop	sta Result
+
+	opt c-
+
+	pla:tax
+
+
+@exit
+
+; ------------------------------------------------------------
+
+RESULT	= DATAORIGIN+$0073
+	rts						; ret
+.endl
+
+; ------------------------------------------------------------
+
+adr.BANKS	= $0101
+.var BANKS	= adr.BANKS .word
+DETECTOS	= $FFF7
+
+.endl							; UNIT MISC
+
+; ------------------------------------------------------------
+
+.local	SYSREQ						; UNIT
+
+; ------------------------------------------------------------
+; ------------------------------------------------------------
+@UnitInit
+
+; optimize OK (SYSREQ), line = 15
+
+	lda #$00
+	sta YES
+
+; optimize FAIL ('MISC.DETECTANTIC', SYSREQ), line = 17
+
+	jsr MISC.DETECTANTIC
+	lda MISC.DETECTANTIC.RESULT
+	jne l_02BA
+	@printSTRING #CODEORIGIN+$000D
+	@printEOL
+	lda #$01
+	sta YES
+l_02BA
+
+; optimize FAIL ('MISC.DETECTCPU', SYSREQ), line = 18
+
+	jsr MISC.DETECTCPU
+	lda MISC.DETECTCPU.RESULT
+	jpl l_02D1
+	@printSTRING #CODEORIGIN+$0024
+	@printEOL
+	lda #$01
+	sta YES
+l_02D1
+
+; optimize FAIL ('MISC.DETECTSTEREO', SYSREQ), line = 19
+
+	jsr MISC.DETECTSTEREO
+	lda MISC.DETECTSTEREO.RESULT
+	jne l_02E5
+	@printSTRING #CODEORIGIN+$003B
+	@printEOL
+	lda #$01
+	sta YES
+l_02E5
+
+; optimize OK (SYSREQ), line = 20
+
+?volatile:
+	lda ATARI.TRIG3
+	jeq l_02FE
+	@printSTRING #CODEORIGIN+$0056
+	@printEOL
+	lda #$01
+	sta YES
+l_02FE
+
+; optimize OK (SYSREQ), line = 22
+
+	lda YES
+	jeq l_0311
+
+; optimize FAIL ('@print', SYSREQ), line = 24
+
+	@printEOL
+
+; optimize FAIL ('@print', SYSREQ), line = 26
+
+	@printSTRING #CODEORIGIN+$006D
+	@printEOL
+
+; --- RepeatUntilProlog
+l_0313
+
+; optimize FAIL ('CRT.KEYPRESSED', SYSREQ), line = 28
+
+	jsr CRT.KEYPRESSED
+	lda CRT.KEYPRESSED.RESULT
+	jeq l_0313
+	lda #$00
+	jmp @halt
+l_0311
+
+	rts
+
+; ------------------------------------------------------------
+
+YES	= DATAORIGIN+$0074
+
+.endl							; UNIT SYSREQ
+
+; ------------------------------------------------------------
+
+.local	SAPLZSS						; UNIT
+
+.local	TLZSSPLAY.INIT					; PROCEDURE | ASSEMBLER
+	sta TLZSSPLAY
+	sty TLZSSPLAY+1
+	sta JMP
+	sty JMP+1
+	add #1
+	scc
+	iny
+	sta PLAYER
+	sty PLAYER+1
+	add #2
+	scc
+	iny
+	sta MODUL
+	sty MODUL+1
+
+; -------------------  ASM Block 00000130  -------------------
+
+	txa:pha
+
+	mwa TLZSSPlay :bp2
+
+	ldy #0
+	lda #$4c	; JMP
+	sta (:bp2),y
+
+	iny
+	lda (:bp2),y
+	add #6		; jsr player+6
+	sta adr
+	iny
+	lda (:bp2),y
+	adc #0
+	sta adr+1
+
+	ldy #4
+	lda (:bp2),y
+	tax		; hi byte of MPT module to Y reg
+	dey
+	lda (:bp2),y	; low byte of MPT module to X reg
+
+	ldy a		; POKEY: $00 | $10 | ...
+
+	jsr $ffff
+adr	equ *-2
+
+	pla:tax
+
+; ------------------------------------------------------------
+
+TLZSSPLAY	= DATAORIGIN+$0075
+A	= DATAORIGIN+$0077
+JMP	= DATAORIGIN+$0078
+PLAYER	= DATAORIGIN+$007A
+MODUL	= DATAORIGIN+$007C
+
+@VarData	= TLZSSPLAY
+@VarDataSize	= 9
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	TLZSSPLAY.DECODE				; FUNCTION | ASSEMBLER
+	sta TLZSSPLAY
+	sty TLZSSPLAY+1
+	sta JMP
+	sty JMP+1
+	add #1
+	scc
+	iny
+	sta PLAYER
+	sty PLAYER+1
+	add #2
+	scc
+	iny
+	sta MODUL
+	sty MODUL+1
+
+; -------------------  ASM Block 00000131  -------------------
+
+	txa:pha
+
+	mwa TLZSSPlay ptr
+
+	clc
+
+	jsr $ff00		; jmp (TLZSSPlay)	6502 buggy indirect jump
+ptr	equ *-2
+
+	lda #0
+	rol @
+	sta Result		; C = 1	-> 	if TRUE then 'end of song'
+
+	pla:tax
+
+@exit
+
+; ------------------------------------------------------------
+
+TLZSSPLAY	= DATAORIGIN+$007E
+RESULT	= DATAORIGIN+$0080
+JMP	= DATAORIGIN+$0081
+PLAYER	= DATAORIGIN+$0083
+MODUL	= DATAORIGIN+$0085
+
+@VarData	= TLZSSPLAY
+@VarDataSize	= 8
+
+	rts						; ret
+.endl
+
+.local	TLZSSPLAY.PLAY					; PROCEDURE | ASSEMBLER
+	sta TLZSSPLAY
+	sty TLZSSPLAY+1
+	sta JMP
+	sty JMP+1
+	add #1
+	scc
+	iny
+	sta PLAYER
+	sty PLAYER+1
+	add #2
+	scc
+	iny
+	sta MODUL
+	sty MODUL+1
+
+; -------------------  ASM Block 00000132  -------------------
+
+	txa:pha
+
+	mwa TLZSSPlay ptr
+
+	sec
+
+	jsr $ff00		; jmp (TLZSSPlay)	6502 buggy indirect jump
+ptr	equ *-2
+
+	pla:tax
+
+; ------------------------------------------------------------
+
+TLZSSPLAY	= DATAORIGIN+$0087
+JMP	= DATAORIGIN+$0089
+PLAYER	= DATAORIGIN+$008B
+MODUL	= DATAORIGIN+$008D
+
+@VarData	= TLZSSPLAY
+@VarDataSize	= 8
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	TLZSSPLAY.STOP					; PROCEDURE | ASSEMBLER
+	sta TLZSSPLAY
+	sty TLZSSPLAY+1
+	sta JMP
+	sty JMP+1
+	add #1
+	scc
+	iny
+	sta PLAYER
+	sty PLAYER+1
+	add #2
+	scc
+	iny
+	sta MODUL
+	sty MODUL+1
+
+; -------------------  ASM Block 00000133  -------------------
+
+	ldy a		; POKEY: $00 | $10 | ...
+
+	lda #0
+	sta $d208,y
+	lda #3
+	sta $d20f,y
+
+	lda #0
+	sta $d200,y
+	sta $d201,y
+	sta $d202,y
+	sta $d203,y
+	sta $d204,y
+	sta $d205,y
+	sta $d206,y
+	sta $d207,y
+
+; ------------------------------------------------------------
+
+TLZSSPLAY	= DATAORIGIN+$008F
+A	= DATAORIGIN+$0091
+JMP	= DATAORIGIN+$0092
+PLAYER	= DATAORIGIN+$0094
+MODUL	= DATAORIGIN+$0096
+
+@VarData	= TLZSSPLAY
+@VarDataSize	= 9
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+; ------------------------------------------------------------
+; ------------------------------------------------------------
+@UnitInit
+
+	rts
+
+; ------------------------------------------------------------
+
+.endl							; UNIT SAPLZSS
+
+.local	PRINTTIME					; PROCEDURE
+
+	jmp l_0323
+
+.local	PRINTDIGITS					; PROCEDURE
+
+; optimize OK (printTime.inc), line = 12
+
+	lda L
+	jeq l_0338
+
+; optimize OK (printTime.inc), line = 13
+
+	ldy L
+	lda adr.T,y
+	sub #$2F
+	asl @
+	asl @
+	asl @
+	add #$60
+	sta A
+
+; optimize FAIL (0, printTime.inc), line = 14
+
+	dec L
+	jmp l_035B
+l_0338
+
+; optimize OK (printTime.inc), line = 16
+
+	lda #$60
+	sta A
+l_035B
+
+; optimize OK (printTime.inc), line = 18
+
+	lda L
+	jeq l_0371
+
+; optimize OK (printTime.inc), line = 19
+
+	ldy L
+	lda adr.T,y
+	sub #$2F
+	asl @
+	asl @
+	asl @
+	sta B
+
+; optimize FAIL (0, printTime.inc), line = 20
+
+	dec L
+	jmp l_0390
+l_0371
+
+; optimize OK (printTime.inc), line = 22
+
+	lda #$00
+	sta B
+l_0390
+
+; optimize OK (printTime.inc), line = 24
+
+	lda #$07
+	sta I
+
+l_039D
+; --- ForToDoCondition
+	lda A
+	add I
+	tay
+	lda adr.DIGITH,y
+	sta :STACKORIGIN+10
+	lda B
+	add I
+	tay
+	lda adr.DIGITH,y
+	ora :STACKORIGIN+10
+	ldy #$00
+	sta (P),y
+
+; optimize FAIL (0, printTime.inc), line = 27
+
+	lda P
+	bne @+
+	dec P+1
+@
+	dec P
+
+; --- ForToDoEpilog
+	dec I
+	jpl l_039D
+l_03AB
+
+; ------------------------------------------------------------
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	PRINTDIGITS_HI					; PROCEDURE
+
+; optimize OK (printTime.inc), line = 36
+
+	lda L
+	jeq l_03E9
+
+; optimize OK (printTime.inc), line = 37
+
+	ldy L
+	lda adr.T,y
+	sub #$2F
+	asl @
+	asl @
+	asl @
+	add _ADD
+	sta A
+
+; optimize FAIL (0, printTime.inc), line = 38
+
+	dec L
+	jmp l_040E
+l_03E9
+
+; optimize OK (printTime.inc), line = 40
+
+	lda _ADD
+	sta A
+l_040E
+
+; optimize OK (printTime.inc), line = 42
+
+	lda #$07
+	sta I
+
+l_041D
+; --- ForToDoCondition
+	ldy #$00
+	lda (P),y
+	and _AND
+	sta :STACKORIGIN+10
+	lda A
+	add I
+	tay
+	lda adr.DIGITH,y
+	ora :STACKORIGIN+10
+	ldy #$00
+	sta (P),y
+
+; optimize FAIL (0, printTime.inc), line = 45
+
+	lda P
+	bne @+
+	dec P+1
+@
+	dec P
+
+; --- ForToDoEpilog
+	dec I
+	jpl l_041D
+l_042B
+
+; ------------------------------------------------------------
+
+_ADD	= DATAORIGIN+$0113
+_AND	= DATAORIGIN+$0114
+
+@VarData	= _ADD
+@VarDataSize	= 2
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	TOSTRING					; PROCEDURE
+	sta A
+
+; optimize OK (printTime.inc), line = 72
+
+	cmp #$0A
+	jcs l_0467
+
+; optimize OK (printTime.inc), line = 73
+
+	lda #$02
+	sta adr.T
+
+; optimize OK (printTime.inc), line = 74
+
+	lda #$30
+	sta adr.T+$01
+
+; optimize OK (printTime.inc), line = 75
+
+	add A
+	sta adr.T+$02
+	jmp l_0486
+l_0467
+
+; optimize OK (printTime.inc), line = 77
+
+	lda A
+	jsr SYSUTILS.BYTETOSTR
+	inx
+	lda SYSUTILS.BYTETOSTR.RESULT
+	sta @move.src
+	lda SYSUTILS.BYTETOSTR.RESULT+1
+	sta @move.src+1
+	@moveSTRING T #33
+	dex
+l_0486
+
+; optimize OK (printTime.inc), line = 79
+
+	lda #$02
+	sta L
+
+; ------------------------------------------------------------
+
+A	= DATAORIGIN+$0115
+
+@VarData	= A
+@VarDataSize	= 1
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+l_0323
+
+; optimize OK (printTime.inc), line = 86
+
+	lda SECOND
+	jsr TOSTRING
+
+; optimize OK (printTime.inc), line = 88
+
+	lda #$A9
+	sta P
+	lda #$DF
+	sta P+1
+
+; optimize OK (printTime.inc), line = 89
+
+	lda #$00
+	sta PRINTDIGITS_HI._ADD
+	lda #$0F
+	sta PRINTDIGITS_HI._AND
+	jsr PRINTDIGITS_HI
+
+; optimize OK (printTime.inc), line = 91
+
+	lda #$A9
+	sta P
+	lda #$DE
+	sta P+1
+
+; optimize OK (printTime.inc), line = 92
+
+	lda #$60
+	sta PRINTDIGITS_HI._ADD
+	lda #$F0
+	sta PRINTDIGITS_HI._AND
+	jsr PRINTDIGITS_HI
+
+; optimize OK (printTime.inc), line = 94
+
+	lda MINUTE
+	jsr TOSTRING
+
+; optimize OK (printTime.inc), line = 96
+
+	lda #$A9
+	sta P
+	lda #$DD
+	sta P+1
+
+; optimize FAIL ('PRINTDIGITS', printTime.inc), line = 97
+
+	jsr PRINTDIGITS
+
+; ------------------------------------------------------------
+
+P	= $E0
+I	= DATAORIGIN+$00EE
+A	= DATAORIGIN+$00EF
+B	= DATAORIGIN+$00F0
+L	= DATAORIGIN+$00F1
+adr.T	= [DATAORIGIN+$00F2] .array [33]
+.var T	= adr.T .word
+
+@VarData	= I
+@VarDataSize	= 37
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	PRINTSPEED					; PROCEDURE
+
+	jmp l_04AE
+
+.local	PRINTDIGITS_HI					; PROCEDURE
+
+; optimize OK (printSpeed.inc), line = 12
+
+	lda L
+	jeq l_04C3
+
+; optimize OK (printSpeed.inc), line = 13
+
+	ldy L
+	lda adr.T,y
+	sub #$2F
+	asl @
+	asl @
+	asl @
+	add _ADD
+	sta A
+
+; optimize FAIL (0, printSpeed.inc), line = 14
+
+	dec L
+	jmp l_04E8
+l_04C3
+
+; optimize OK (printSpeed.inc), line = 16
+
+	lda _ADD
+	sta A
+l_04E8
+
+; optimize OK (printSpeed.inc), line = 18
+
+	lda #$07
+	sta I
+
+l_04F7
+; --- ForToDoCondition
+	ldy #$00
+	lda (P),y
+	and _AND
+	sta :STACKORIGIN+10
+	lda A
+	add I
+	tay
+	lda adr.DIGITH,y
+	ora :STACKORIGIN+10
+	ldy #$00
+	sta (P),y
+
+; optimize FAIL (0, printSpeed.inc), line = 21
+
+	lda P
+	bne @+
+	dec P+1
+@
+	dec P
+
+; --- ForToDoEpilog
+	dec I
+	jpl l_04F7
+l_0505
+
+; ------------------------------------------------------------
+
+_ADD	= DATAORIGIN+$013A
+_AND	= DATAORIGIN+$013B
+
+@VarData	= _ADD
+@VarDataSize	= 2
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	TOSTRING					; PROCEDURE
+	sta A
+
+; optimize OK (printSpeed.inc), line = 48
+
+	cmp #$0A
+	jcs l_0541
+
+; optimize OK (printSpeed.inc), line = 49
+
+	lda #$02
+	sta adr.T
+
+; optimize OK (printSpeed.inc), line = 50
+
+	lda #$30
+	sta adr.T+$01
+
+; optimize OK (printSpeed.inc), line = 51
+
+	add A
+	sta adr.T+$02
+	jmp l_0560
+l_0541
+
+; optimize OK (printSpeed.inc), line = 53
+
+	lda A
+	jsr SYSUTILS.BYTETOSTR
+	inx
+	lda SYSUTILS.BYTETOSTR.RESULT
+	sta @move.src
+	lda SYSUTILS.BYTETOSTR.RESULT+1
+	sta @move.src+1
+	@moveSTRING T #33
+	dex
+l_0560
+
+; optimize OK (printSpeed.inc), line = 55
+
+	lda #$02
+	sta L
+
+; ------------------------------------------------------------
+
+A	= DATAORIGIN+$013C
+
+@VarData	= A
+@VarDataSize	= 1
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+l_04AE
+
+; optimize OK (printSpeed.inc), line = 62
+
+	lda #$64
+	sub SPEED
+	jsr TOSTRING
+
+; optimize OK (printSpeed.inc), line = 64
+
+	lda #$C9
+	sta P
+	lda #$DE
+	sta P+1
+
+; optimize OK (printSpeed.inc), line = 65
+
+	lda #$00
+	sta PRINTDIGITS_HI._ADD
+	lda #$0F
+	sta PRINTDIGITS_HI._AND
+	jsr PRINTDIGITS_HI
+
+; optimize OK (printSpeed.inc), line = 67
+
+	lda #$C9
+	sta P
+	lda #$DD
+	sta P+1
+
+; optimize OK (printSpeed.inc), line = 68
+
+	lda #$60
+	sta PRINTDIGITS_HI._ADD
+	lda #$F0
+	sta PRINTDIGITS_HI._AND
+	jsr PRINTDIGITS_HI
+
+; ------------------------------------------------------------
+
+P	= $E0
+I	= DATAORIGIN+$0116
+A	= DATAORIGIN+$0117
+L	= DATAORIGIN+$0118
+adr.T	= [DATAORIGIN+$0119] .array [33]
+.var T	= adr.T .word
+
+@VarData	= I
+@VarDataSize	= 36
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	PRINTSCORE					; PROCEDURE
+
+	jmp l_0583
+
+.local	PRINTDIGITS					; PROCEDURE
+
+; optimize OK (printScore.inc), line = 12
+
+	lda L
+	jeq l_0598
+
+; optimize OK (printScore.inc), line = 13
+
+	ldy L
+	lda adr.T,y
+	sub #$2F
+	asl @
+	asl @
+	asl @
+	add #$60
+	sta A
+
+; optimize FAIL (0, printScore.inc), line = 14
+
+	dec L
+	jmp l_05BB
+l_0598
+
+; optimize OK (printScore.inc), line = 16
+
+	lda #$68
+	sta A
+l_05BB
+
+; optimize OK (printScore.inc), line = 18
+
+	lda L
+	jeq l_05D1
+
+; optimize OK (printScore.inc), line = 19
+
+	ldy L
+	lda adr.T,y
+	sub #$2F
+	asl @
+	asl @
+	asl @
+	sta B
+
+; optimize FAIL (0, printScore.inc), line = 20
+
+	dec L
+	jmp l_05F0
+l_05D1
+
+; optimize OK (printScore.inc), line = 22
+
+	lda #$08
+	sta B
+l_05F0
+
+; optimize OK (printScore.inc), line = 24
+
+	lda #$07
+	sta I
+
+l_05FD
+; --- ForToDoCondition
+	lda A
+	add I
+	tay
+	lda adr.DIGITH,y
+	sta :STACKORIGIN+10
+	lda B
+	add I
+	tay
+	lda adr.DIGITH,y
+	ora :STACKORIGIN+10
+	ldy #$00
+	sta (P),y
+
+; optimize FAIL (0, printScore.inc), line = 27
+
+	lda P
+	bne @+
+	dec P+1
+@
+	dec P
+
+; --- ForToDoEpilog
+	dec I
+	jpl l_05FD
+l_060B
+
+; ------------------------------------------------------------
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	PRINTDIGITS_LO					; PROCEDURE
+
+; optimize OK (printScore.inc), line = 36
+
+	lda L
+	jeq l_0649
+
+; optimize OK (printScore.inc), line = 37
+
+	ldy L
+	lda adr.T,y
+	sub #$2F
+	asl @
+	asl @
+	asl @
+	add #$60
+	sta A
+
+; optimize FAIL (0, printScore.inc), line = 38
+
+	dec L
+	jmp l_066C
+l_0649
+
+; optimize OK (printScore.inc), line = 40
+
+	lda #$68
+	sta A
+l_066C
+
+; optimize OK (printScore.inc), line = 42
+
+	lda #$07
+	sta I
+
+l_0679
+; --- ForToDoCondition
+	ldy #$00
+	lda (P),y
+	and #$F0
+	sta :STACKORIGIN+10
+	lda A
+	add I
+	tay
+	lda adr.DIGITH,y
+	ora :STACKORIGIN+10
+	ldy #$00
+	sta (P),y
+
+; optimize FAIL (0, printScore.inc), line = 45
+
+	lda P
+	bne @+
+	dec P+1
+@
+	dec P
+
+; --- ForToDoEpilog
+	dec I
+	jpl l_0679
+l_0687
+
+; ------------------------------------------------------------
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+l_0583
+
+; optimize OK (printScore.inc), line = 53
+
+	lda SCORE
+	sta SCORE_
+	lda SCORE+1
+	sta SCORE_+1
+	lda SCORE+2
+	sta SCORE_+2
+	lda SCORE+3
+	sta SCORE_+3
+
+; optimize FAIL ('SYSTEM.STR_0133', printScore.inc), line = 55
+
+	inx
+	mva T :STACKORIGIN,x
+	mva T+1 :STACKORIGIN+STACKWIDTH,x
+	inx
+	mva SCORE :STACKORIGIN,x
+	mva SCORE+1 :STACKORIGIN+STACKWIDTH,x
+	mva SCORE+2 :STACKORIGIN+STACKWIDTH*2,x
+	mva SCORE+3 :STACKORIGIN+STACKWIDTH*3,x
+	jsr SYSTEM.STR_0133
+
+; optimize OK (printScore.inc), line = 57
+
+	lda adr.T
+	sta L
+
+; optimize OK (printScore.inc), line = 59
+
+	lda #$49
+	sta P
+	lda #$DE
+	sta P+1
+
+; optimize FAIL ('PRINTDIGITS', printScore.inc), line = 60
+
+	jsr PRINTDIGITS
+
+; optimize OK (printScore.inc), line = 62
+
+	lda #$49
+	sta P
+	lda #$DD
+	sta P+1
+
+; optimize FAIL ('PRINTDIGITS', printScore.inc), line = 63
+
+	jsr PRINTDIGITS
+
+; optimize OK (printScore.inc), line = 65
+
+	lda #$49
+	sta P
+	lda #$DC
+	sta P+1
+
+; optimize FAIL ('PRINTDIGITS_LO', printScore.inc), line = 66
+
+	jsr PRINTDIGITS_LO
+
+; ------------------------------------------------------------
+
+P	= $E0
+I	= DATAORIGIN+$013D
+A	= DATAORIGIN+$013E
+B	= DATAORIGIN+$013F
+L	= DATAORIGIN+$0140
+adr.T	= [DATAORIGIN+$0141] .array [33]
+.var T	= adr.T .word
+
+@VarData	= I
+@VarDataSize	= 37
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	PRINTHISCORE					; PROCEDURE
+
+	jmp l_06CA
+
+.local	PRINTDIGITS					; PROCEDURE
+
+; optimize OK (printHiScore.inc), line = 12
+
+	lda L
+	jeq l_06DF
+
+; optimize OK (printHiScore.inc), line = 13
+
+	ldy L
+	lda adr.T,y
+	sub #$2F
+	asl @
+	asl @
+	asl @
+	add #$60
+	sta A
+
+; optimize FAIL (0, printHiScore.inc), line = 14
+
+	dec L
+	jmp l_0702
+l_06DF
+
+; optimize OK (printHiScore.inc), line = 16
+
+	lda #$68
+	sta A
+l_0702
+
+; optimize OK (printHiScore.inc), line = 18
+
+	lda L
+	jeq l_0718
+
+; optimize OK (printHiScore.inc), line = 19
+
+	ldy L
+	lda adr.T,y
+	sub #$2F
+	asl @
+	asl @
+	asl @
+	sta B
+
+; optimize FAIL (0, printHiScore.inc), line = 20
+
+	dec L
+	jmp l_0737
+l_0718
+
+; optimize OK (printHiScore.inc), line = 22
+
+	lda #$08
+	sta B
+l_0737
+
+; optimize OK (printHiScore.inc), line = 24
+
+	lda #$07
+	sta I
+
+l_0744
+; --- ForToDoCondition
+	lda A
+	add I
+	tay
+	lda adr.DIGITH,y
+	sta :STACKORIGIN+10
+	lda B
+	add I
+	tay
+	lda adr.DIGITH,y
+	ora :STACKORIGIN+10
+	ldy I
+	sta (P),y
+
+; --- ForToDoEpilog
+	dec I
+	jpl l_0744
+l_0752
+
+; ------------------------------------------------------------
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	PRINTDIGITS_HI					; PROCEDURE
+
+; optimize OK (printHiScore.inc), line = 34
+
+	lda L
+	jeq l_078E
+
+; optimize OK (printHiScore.inc), line = 35
+
+	ldy L
+	lda adr.T,y
+	sub #$2F
+	asl @
+	asl @
+	asl @
+	sta A
+
+; optimize FAIL (0, printHiScore.inc), line = 36
+
+	dec L
+	jmp l_07AD
+l_078E
+
+; optimize OK (printHiScore.inc), line = 38
+
+	lda #$08
+	sta A
+l_07AD
+
+; optimize OK (printHiScore.inc), line = 40
+
+	lda #$07
+	sta I
+
+l_07BA
+; --- ForToDoCondition
+	ldy I
+	lda (P),y
+	and #$0F
+	sta :STACKORIGIN+10
+	lda I
+	add A
+	tay
+	lda adr.DIGITH,y
+	ora :STACKORIGIN+10
+	ldy I
+	sta (P),y
+
+; --- ForToDoEpilog
+	dec I
+	jpl l_07BA
+l_07C8
+
+; ------------------------------------------------------------
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+l_06CA
+
+; optimize OK (printHiScore.inc), line = 48
+
+	lda HISCORE
+	sta HISCORE_
+	lda HISCORE+1
+	sta HISCORE_+1
+	lda HISCORE+2
+	sta HISCORE_+2
+	lda HISCORE+3
+	sta HISCORE_+3
+
+; optimize FAIL ('SYSTEM.STR_0133', printHiScore.inc), line = 50
+
+	inx
+	mva T :STACKORIGIN,x
+	mva T+1 :STACKORIGIN+STACKWIDTH,x
+	inx
+	mva HISCORE :STACKORIGIN,x
+	mva HISCORE+1 :STACKORIGIN+STACKWIDTH,x
+	mva HISCORE+2 :STACKORIGIN+STACKWIDTH*2,x
+	mva HISCORE+3 :STACKORIGIN+STACKWIDTH*3,x
+	jsr SYSTEM.STR_0133
+
+; optimize OK (printHiScore.inc), line = 52
+
+	lda adr.T
+	sta L
+
+; optimize OK (printHiScore.inc), line = 54
+
+	lda #$62
+	sta P
+	lda #$DF
+	sta P+1
+
+; optimize FAIL ('PRINTDIGITS_HI', printHiScore.inc), line = 55
+
+	jsr PRINTDIGITS_HI
+
+; optimize OK (printHiScore.inc), line = 57
+
+	lda #$62
+	sta P
+	lda #$DE
+	sta P+1
+
+; optimize FAIL ('PRINTDIGITS', printHiScore.inc), line = 58
+
+	jsr PRINTDIGITS
+
+; optimize OK (printHiScore.inc), line = 60
+
+	lda #$62
+	sta P
+	lda #$DD
+	sta P+1
+
+; optimize FAIL ('PRINTDIGITS', printHiScore.inc), line = 61
+
+	jsr PRINTDIGITS
+
+; ------------------------------------------------------------
+
+P	= $E0
+I	= DATAORIGIN+$0162
+A	= DATAORIGIN+$0163
+B	= DATAORIGIN+$0164
+L	= DATAORIGIN+$0165
+adr.T	= [DATAORIGIN+$0166] .array [33]
+.var T	= adr.T .word
+
+@VarData	= I
+@VarDataSize	= 37
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	MONSTERS					; PROCEDURE
+
+; -------------------  ASM Block 00000134  -------------------
+
+  lda frame_cnt
+  and #7
+  jne @exit
+ 
+; optimize OK (monsters.inc), line = 18
+
+	lda PTR
+	sta SRC
+	lda PTR+1
+	sta SRC+1
+
+; optimize OK (monsters.inc), line = 20
+
+	mwy FRM :bp2
+	ldy #$00
+	lda (:bp2),y
+	and #$03
+	sta @CASETMP_0006
+	cmp #$01
+	beq @+
+	cmp #$03
+	jne l_0821
+@
+
+; optimize OK (monsters.inc), line = 22
+
+	lda SRC
+	add #$18
+	sta SRC
+	scc
+	inc SRC+1
+
+	jmp a_0006
+l_0821
+	cmp #$02
+	jne l_082B
+@
+
+; optimize OK (monsters.inc), line = 24
+
+	lda SRC
+	add #$30
+	sta SRC
+	scc
+	inc SRC+1
+
+l_082B
+a_0006
+
+; optimize OK (monsters.inc), line = 28
+
+	lda OFS
+	sta PM1
+	lda #$DD
+	sta PM1+1
+
+; optimize OK (monsters.inc), line = 29
+
+	lda OFS
+	sta PM2
+	lda #$DE
+	sta PM2+1
+
+; optimize OK (monsters.inc), line = 32
+
+	lda #$17
+	tay
+
+l_085F
+; --- ForToDoCondition
+	lda (SRC),y
+	sta (PM1),y
+
+; --- ForToDoEpilog
+	dey
+	jpl l_085F
+	sty I
+
+; optimize OK (monsters.inc), line = 34
+
+	lda SRC
+	add #$48
+	sta SRC
+	scc
+	inc SRC+1
+
+; optimize OK (monsters.inc), line = 36
+
+	lda #$17
+	tay
+
+l_0888
+; --- ForToDoCondition
+	lda (SRC),y
+	sta (PM2),y
+
+; --- ForToDoEpilog
+	dey
+	jpl l_0888
+	sty I
+
+; optimize OK (monsters.inc), line = 38
+
+	mwy FRM :bp2
+	ldy #$00
+	lda (:bp2),y
+	add #$01
+	sta (:bp2),y
+
+; ------------------------------------------------------------
+
+PTR	= DATAORIGIN+$0187
+OFS	= DATAORIGIN+$0189
+FRM	= DATAORIGIN+$018A
+I	= DATAORIGIN+$018C
+SRC	= $E0
+PM1	= $E2
+PM2	= $E4
+@CASETMP_0006	= DATAORIGIN+$018D
+
+@VarData	= PTR
+@VarDataSize	= 7
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	PANELUPDATE					; PROCEDURE
+
+; optimize OK (block_attack.pas), line = 396
+
+	mwy VRAM :bp2
+	ldy #$00
+	lda (:bp2),y
+	iny
+	add #$1D
+	sta P
+	lda (:bp2),y
+	adc #$00
+	sta P+1
+
+; optimize OK (block_attack.pas), line = 398
+
+	lda #$03
+	sta J
+
+l_08BE
+; --- ForToDoCondition
+	ldy #$00
+	lda #$FD
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 401
+
+	ldy #$28
+	lda #$FB
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 402
+
+	ldy #$50
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 403
+
+	ldy #$78
+	sta (P),y
+	lda P
+	add #$A0
+	sta P
+	scc
+	inc P+1
+
+; optimize OK (block_attack.pas), line = 404
+
+	ldy #$00
+	lda #$FC
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 405
+
+	ldy #$28
+	lda #$FA
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 406
+
+	ldy #$50
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 407
+
+	ldy #$78
+	sta (P),y
+	lda P
+	add #$A0
+	sta P
+	scc
+	inc P+1
+
+; --- ForToDoEpilog
+	dec J
+	jpl l_08BE
+l_08CC
+
+; optimize OK (block_attack.pas), line = 412
+
+	ldy VSC
+	lda #$00
+	sta $E3E0,y
+
+; optimize OK (block_attack.pas), line = 413
+
+	sta $E7E0,y
+
+; optimize OK (block_attack.pas), line = 415
+
+	lda #$FF
+	sta $E3E8,y
+
+; optimize OK (block_attack.pas), line = 416
+
+	sta $E7E8,y
+
+; optimize OK (block_attack.pas), line = 418
+
+	lda VSC
+	jne l_0949
+
+; optimize OK (block_attack.pas), line = 420
+
+	lda #$FF
+	sta $E3E1
+
+; optimize OK (block_attack.pas), line = 421
+
+	sta $E3E2
+
+; optimize OK (block_attack.pas), line = 422
+
+	sta $E3E3
+
+; optimize OK (block_attack.pas), line = 423
+
+	sta $E3E4
+
+; optimize OK (block_attack.pas), line = 424
+
+	sta $E3E5
+
+; optimize OK (block_attack.pas), line = 425
+
+	sta $E3E6
+
+; optimize OK (block_attack.pas), line = 426
+
+	sta $E3E7
+
+; optimize OK (block_attack.pas), line = 428
+
+	sta $E7E1
+
+; optimize OK (block_attack.pas), line = 429
+
+	sta $E7E2
+
+; optimize OK (block_attack.pas), line = 430
+
+	sta $E7E3
+
+; optimize OK (block_attack.pas), line = 431
+
+	sta $E7E4
+
+; optimize OK (block_attack.pas), line = 432
+
+	sta $E7E5
+
+; optimize OK (block_attack.pas), line = 433
+
+	sta $E7E6
+
+; optimize OK (block_attack.pas), line = 434
+
+	sta $E7E7
+
+; optimize OK (block_attack.pas), line = 436
+
+	lda #$00
+	sta $E3E9
+
+; optimize OK (block_attack.pas), line = 437
+
+	sta $E3EA
+
+; optimize OK (block_attack.pas), line = 438
+
+	sta $E3EB
+
+; optimize OK (block_attack.pas), line = 439
+
+	sta $E3EC
+
+; optimize OK (block_attack.pas), line = 440
+
+	sta $E3ED
+
+; optimize OK (block_attack.pas), line = 441
+
+	sta $E3EE
+
+; optimize OK (block_attack.pas), line = 442
+
+	sta $E3EF
+
+; optimize OK (block_attack.pas), line = 444
+
+	sta $E7E9
+
+; optimize OK (block_attack.pas), line = 445
+
+	sta $E7EA
+
+; optimize OK (block_attack.pas), line = 446
+
+	sta $E7EB
+
+; optimize OK (block_attack.pas), line = 447
+
+	sta $E7EC
+
+; optimize OK (block_attack.pas), line = 448
+
+	sta $E7ED
+
+; optimize OK (block_attack.pas), line = 449
+
+	sta $E7EE
+
+; optimize OK (block_attack.pas), line = 450
+
+	sta $E7EF
+l_0949
+
+; ------------------------------------------------------------
+
+P	= :STACKORIGIN-2
+J	= DATAORIGIN+$018E
+CH0	= $7C
+CH1	= $7D
+
+@VarData	= J
+@VarDataSize	= 1
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	TIMEUPDATE					; PROCEDURE
+
+; optimize OK (block_attack.pas), line = 460
+
+	lda STOP
+	jne l_09C2
+	lda SCROLL
+	jne l_09C2
+
+; optimize OK (block_attack.pas), line = 462
+
+	lda GAMEMODE
+	cmp #$01
+	jne l_09D5
+
+; optimize FAIL (0, block_attack.pas), line = 464
+
+	dec SECOND
+
+; optimize OK (block_attack.pas), line = 465
+
+	lda SECOND
+	cmp #$FF
+	jne l_09EC
+
+; optimize OK (block_attack.pas), line = 466
+
+	lda #$3B
+	sta SECOND
+
+; optimize FAIL (0, block_attack.pas), line = 467
+
+	dec MINUTE
+l_09EC
+	jmp l_0A00
+l_09D5
+
+; optimize FAIL (0, block_attack.pas), line = 472
+
+	inc SECOND
+
+; optimize OK (block_attack.pas), line = 473
+
+	lda SECOND
+	cmp #$3C
+	jcc l_0A16
+
+; optimize OK (block_attack.pas), line = 474
+
+	lda #$00
+	sta SECOND
+
+; optimize FAIL (0, block_attack.pas), line = 475
+
+	inc MINUTE
+l_0A16
+l_0A00
+l_09C2
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	IRQ						; PROCEDURE | ASSEMBLER | INTERRUPT
+
+; -------------------  ASM Block 00000135  -------------------
+
+	sta rA
+
+	lda pmc: pm_color
+
+	sta color3
+
+	inc pmc
+
+
+	lda #0			; reuse IRQ
+	sta irqen
+	lda #4
+	sta irqen
+
+
+	lda rA: #0
+
+	rti						; ret
+.endl
+
+.local	PLAYSAP						; PROCEDURE | ASSEMBLER | KEEP
+
+; -------------------  ASM Block 00000136  -------------------
+
+	lda MSX
+	ldy MSX+1
+	jsr SAPLZSS.TLZSSPLAY.Decode
+
+	lda MSX
+	ldy MSX+1
+	jmp SAPLZSS.TLZSSPLAY.Play
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	NMI						; PROCEDURE | ASSEMBLER | INTERRUPT
+
+; -------------------  ASM Block 00000137  -------------------
+
+	bit nmist
+	bpl vbl
+
+	jmp (vdslst)
+
+vbl	sta stimer		; restart IRQ
+
+	sta rA
+	stx rX
+	sty rY
+
+	sta nmist
+
+; ---
+
+	lda #0
+	sta IRQ.pmc
+
+; ---
+
+; -----------------------
+; play msx
+; ----------------------
+
+@	lda msx_play
+	beq @+
+
+	lda MSX
+	ldy MSX+1
+	jsr SAPLZSS.TLZSSPLAY.Decode
+
+	lda MSX
+	ldy MSX+1
+	jsr SAPLZSS.TLZSSPLAY.Play
+
+; -----------------------
+; sfx match
+; ----------------------
+
+@	ldy match_play
+	beq @+
+
+	lda sfx_match_audf: $1000,y
+	sta audf1
+	iny
+	lda sfx_match_audc: $1000,y
+	sta audc1
+	iny
+	sty match_play
+
+	cpy #18+1
+	bne @+
+
+	lda #0
+	sta match_play
+
+; -----------------------
+; sfx move
+; ----------------------
+
+@	ldy move_play
+	beq @+
+
+	lda adr.sfmove,y
+	sta audf2
+	iny
+	lda adr.sfmove,y
+	sta audc2
+	iny
+	sty move_play
+
+	cpy #18+1
+	bne @+
+
+	lda #0
+	sta move_play
+
+; -----------------------
+; sfx swap
+; ----------------------
+
+@	ldy swap_play
+	beq @+
+
+	lda adr.sfswap,y
+	sta audf3
+	iny
+	lda adr.sfswap,y
+	sta audc3
+	iny
+	sty swap_play
+
+	cpy #18+1
+	bne @+
+
+	lda #0
+	sta swap_play
+
+; ----------------------
+
+@	inc rtclok+2
+
+	mva sdmctl dmactl
+
+	mwa SDLSTL dlptr
+
+	:5 mva 708+# $d016+#
+
+	lda >CHARSET_RAM_ADDRESS
+.def	:JGPFirstCharset = *-1
+	sta JGPCharset
+
+;	lda #$48
+;	sta color1
+;	lda #$8c
+;	sta color2
+
+	lda #128-29
+	sta dliCnt		; unit JPG2 ; procedure JGPDLI
+
+	lda rtclok+2
+	and #8
+
+	sta atract
+
+	:3 lsr @
+	pha
+	add left_edge
+	sta hposm0
+
+	pla
+	eor #$ff
+	adc right_edge
+	sta hposm3
+
+	lda ScrollFreeze
+	ora ScrollFreeze+1
+	bne @+
+
+	:2 inc speed_cnt
+@
+	dec tic
+	bpl toExit
+
+	mva #49 tic
+
+	jsr timeUpdate
+
+toExit
+
+	lda rA: #0
+	ldx rX: #0
+	ldy rY: #0
+
+	rti
+
+tic	dta 49
+
+
+	rti						; ret
+.endl
+
+.local	TILESFALLDOWN					; FUNCTION
+
+; optimize OK (block_attack.pas), line = 683
+
+	lda #$00
+	sta RESULT
+
+; optimize OK (block_attack.pas), line = 685
+
+	lda #$59
+	tay
+
+l_0A37
+; --- ForToDoCondition
+	lda adr.PLAYFIELD,y
+	jeq l_0A5A
+
+; optimize OK (block_attack.pas), line = 687
+
+	lda adr.PLAYFIELD+$06,y
+	jne l_0A74
+
+; optimize OK (block_attack.pas), line = 688
+
+	lda adr.PLAYFIELD,y
+	sta adr.PLAYFIELD+$06,y
+
+; optimize OK (block_attack.pas), line = 689
+
+	lda #$00
+	sta adr.PLAYFIELD,y
+
+; optimize OK (block_attack.pas), line = 691
+
+	lda #$01
+	sta RESULT
+
+; optimize OK (block_attack.pas), line = 693
+
+	lda MOVE_PLAY
+	jne l_0AA2
+	lda #$01
+	sta MOVE_PLAY
+l_0AA2
+l_0A74
+l_0A5A
+
+; --- ForToDoEpilog
+	dey
+	jpl l_0A37
+	sty K
+@exit
+
+; ------------------------------------------------------------
+
+RESULT	= DATAORIGIN+$018F
+K	= DATAORIGIN+$0190
+
+@VarData	= K
+@VarDataSize	= 1
+
+	rts						; ret
+.endl
+
+.local	ONINVERS					; FUNCTION | INLINE
+
+	.MACRO m@INLINE
+	sta A
+
+; optimize OK (block_attack.pas), line = 703
+
+	jeq l_0AD4x
+	cmp #$05
+	jne l_0AD4
+l_0AD4x
+
+; optimize OK (block_attack.pas), line = 704
+
+	lda #$82
+	jmp l_0AE2
+l_0AD4
+
+; optimize OK (block_attack.pas), line = 706
+
+	lda #$02
+l_0AE2
+	sta RESULT
+@exit
+	.ENDM
+
+; ------------------------------------------------------------
+
+A	= DATAORIGIN+$0191
+RESULT	= DATAORIGIN+$0192
+
+@VarData	= A
+@VarDataSize	= 1
+
+.endl
+
+.local	TILECODE					; FUNCTION
+	sta A
+
+; optimize OK (block_attack.pas), line = 715
+
+	jeq l_0AFC
+
+; optimize FAIL (0, block_attack.pas), line = 717
+
+	dec A
+
+; optimize OK (block_attack.pas), line = 719
+
+	lda A
+	.LOCAL +MAIN.ONINVERS
+	m@INLINE
+	.ENDL
+	lda ONINVERS.RESULT
+	sta INV
+
+; optimize OK (block_attack.pas), line = 721
+
+	lda A
+	asl @
+	asl @
+	add INV
+	sta A
+l_0AFC
+
+; optimize OK (block_attack.pas), line = 725
+
+	lda A
+	sta RESULT
+@exit
+
+; ------------------------------------------------------------
+
+A	= DATAORIGIN+$0193
+RESULT	= DATAORIGIN+$0194
+INV	= DATAORIGIN+$0195
+
+@VarData	= A
+@VarDataSize	= 2
+
+	rts						; ret
+.endl
+
+.local	DRAWVERTICALJUMPTILES				; PROCEDURE
+
+; optimize OK (block_attack.pas), line = 735
+
+	mwy VRAM :bp2
+	ldy #$00
+	lda (:bp2),y
+	sta :STACKORIGIN+9
+	tya
+	sta :STACKORIGIN+STACKWIDTH+10
+	iny
+	lda X
+	asl @
+	rol :STACKORIGIN+STACKWIDTH+10
+	asl @
+	rol :STACKORIGIN+STACKWIDTH+10
+	add :STACKORIGIN+9
+	sta :STACKORIGIN+9
+	lda (:bp2),y
+	adc :STACKORIGIN+STACKWIDTH+10
+	sta P+1
+	lda :STACKORIGIN+9
+	add #$04
+	sta P
+	scc
+	inc P+1
+
+; optimize OK (block_attack.pas), line = 737
+
+	lda CNTROW
+	jeq l_0B49
+	lda P
+	sub #$28
+	sta P
+	scs
+	dec P+1
+l_0B49
+
+; optimize OK (block_attack.pas), line = 739
+
+	lda X
+	sta K
+
+; optimize OK (block_attack.pas), line = 741
+
+	lda #$0E
+	sta I
+
+l_0B5C
+; --- ForToDoCondition
+	ldy K
+	lda adr.PLAYFIELD,y
+	sta A
+
+; optimize OK (block_attack.pas), line = 745
+
+	cmp #$01
+	jcc l_0B85
+
+; optimize OK (block_attack.pas), line = 746
+
+	cmp #$07
+	jcs l_0B98
+
+; optimize FAIL (0, block_attack.pas), line = 748
+
+	dec A
+
+; optimize OK (block_attack.pas), line = 750
+
+	lda A
+	.LOCAL +MAIN.ONINVERS
+	m@INLINE
+	.ENDL
+	lda ONINVERS.RESULT
+	sta INV
+
+; optimize OK (block_attack.pas), line = 752
+
+	lda C
+	and #$0F
+	cmp #$08
+	jcc l_0BBA
+	lda A
+	add #$06
+	sta A
+l_0BBA
+
+; optimize OK (block_attack.pas), line = 754
+
+	lda A
+	asl @
+	asl @
+	add INV
+	sta A
+
+; optimize OK (block_attack.pas), line = 756
+
+	ldy #$00
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 757
+
+	ldy #$28
+	sta (P),y
+
+; optimize FAIL (0, block_attack.pas), line = 759
+
+	inc A
+
+; optimize OK (block_attack.pas), line = 761
+
+	ldy #$01
+	lda A
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 762
+
+	ldy #$29
+	sta (P),y
+
+; optimize FAIL (0, block_attack.pas), line = 764
+
+	inc A
+
+; optimize OK (block_attack.pas), line = 766
+
+	ldy #$02
+	lda A
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 767
+
+	ldy #$2A
+	sta (P),y
+
+; optimize FAIL (0, block_attack.pas), line = 769
+
+	inc A
+
+; optimize OK (block_attack.pas), line = 771
+
+	ldy #$03
+	lda A
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 772
+
+	ldy #$2B
+	sta (P),y
+l_0B98
+l_0B85
+
+; optimize OK (block_attack.pas), line = 776
+
+	lda P
+	add #$50
+	sta P
+	scc
+	inc P+1
+
+; optimize OK (block_attack.pas), line = 778
+
+	lda K
+	add #$06
+	sta K
+
+; --- ForToDoEpilog
+	dec I
+	jpl l_0B5C
+l_0B6A
+
+; ------------------------------------------------------------
+
+X	= DATAORIGIN+$0196
+C	= DATAORIGIN+$0197
+I	= DATAORIGIN+$0198
+A	= DATAORIGIN+$0199
+INV	= DATAORIGIN+$019A
+K	= DATAORIGIN+$019B
+P	= $E0
+
+@VarData	= X
+@VarDataSize	= 6
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	DRAWHORIZONTALTILES				; PROCEDURE | REGISTER
+
+; optimize OK (block_attack.pas), line = 789
+
+	lda #$05
+	sta I
+
+l_0C2A
+; --- ForToDoCondition
+	ldy K
+	lda adr.PLAYFIELD,y
+	sta A
+
+; optimize OK (block_attack.pas), line = 796
+
+	jne l_0C53
+
+; optimize OK (block_attack.pas), line = 798
+
+	ldy #$00
+	tya
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 799
+
+	ldy #$01
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 800
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 801
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 803
+
+	ldy #$28
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 804
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 805
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 806
+
+	iny
+	jmp l_0C85
+l_0C53
+
+; optimize FAIL (0, block_attack.pas), line = 810
+
+	dec A
+
+; optimize OK (block_attack.pas), line = 812
+
+	lda A
+	jpl l_0C9B
+	and #$7F
+	add #$0C
+	sta A
+l_0C9B
+
+; optimize OK (block_attack.pas), line = 814
+
+	lda A
+	.LOCAL +MAIN.ONINVERS
+	m@INLINE
+	.ENDL
+	lda ONINVERS.RESULT
+	sta INV
+
+; optimize OK (block_attack.pas), line = 816
+
+	lda A
+	asl @
+	asl @
+	add INV
+	sta A
+
+; optimize OK (block_attack.pas), line = 819
+
+	cmp #$46
+	jne l_0CD5
+
+; optimize OK (block_attack.pas), line = 821
+
+	ldy #$00
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 822
+
+	ora #$80
+	ldy #$28
+	sta (P),y
+
+; optimize FAIL (0, block_attack.pas), line = 824
+
+	inc A
+
+; optimize OK (block_attack.pas), line = 826
+
+	ldy #$01
+	lda A
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 827
+
+	ora #$80
+	ldy #$29
+	sta (P),y
+
+; optimize FAIL (0, block_attack.pas), line = 829
+
+	inc A
+
+; optimize OK (block_attack.pas), line = 831
+
+	ldy #$02
+	lda A
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 832
+
+	ora #$80
+	ldy #$2A
+	sta (P),y
+
+; optimize FAIL (0, block_attack.pas), line = 834
+
+	inc A
+
+; optimize OK (block_attack.pas), line = 836
+
+	ldy #$03
+	lda A
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 837
+
+	ora #$80
+	ldy #$2B
+	jmp l_0D33
+l_0CD5
+
+; optimize OK (block_attack.pas), line = 841
+
+	ldy #$00
+	lda A
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 842
+
+	ldy #$28
+	sta (P),y
+
+; optimize FAIL (0, block_attack.pas), line = 844
+
+	inc A
+
+; optimize OK (block_attack.pas), line = 846
+
+	ldy #$01
+	lda A
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 847
+
+	ldy #$29
+	sta (P),y
+
+; optimize FAIL (0, block_attack.pas), line = 849
+
+	inc A
+
+; optimize OK (block_attack.pas), line = 851
+
+	ldy #$02
+	lda A
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 852
+
+	ldy #$2A
+	sta (P),y
+
+; optimize FAIL (0, block_attack.pas), line = 854
+
+	inc A
+
+; optimize OK (block_attack.pas), line = 856
+
+	ldy #$03
+	lda A
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 857
+
+	ldy #$2B
+l_0C85
+l_0D33
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 863
+
+	lda P
+	add #$04
+	sta P
+	scc
+	inc P+1
+
+; optimize FAIL (0, block_attack.pas), line = 865
+
+	inc K
+
+; --- ForToDoEpilog
+	dec I
+	jpl l_0C2A
+l_0C38
+
+; ------------------------------------------------------------
+
+P	= :EDX
+K	= :ECX
+I	= DATAORIGIN+$019C
+A	= DATAORIGIN+$019D
+INV	= DATAORIGIN+$019E
+
+@VarData	= I
+@VarDataSize	= 3
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	SFX_MATCH					; PROCEDURE
+
+; optimize OK (block_attack.pas), line = 874
+
+	lda MATCH
+	sta @CASETMP_0007
+	jne l_0D90
+@
+
+; -------------------  ASM Block 00000138  -------------------
+
+		lda <adr.match1
+		sta NMI.sfx_match_audf
+		sta NMI.sfx_match_audc
+
+		lda >adr.match1
+		sta NMI.sfx_match_audf+1
+		sta NMI.sfx_match_audc+1
+	
+	jmp a_0007
+l_0D90
+	cmp #$01
+	jne l_0D99
+@
+
+; -------------------  ASM Block 00000139  -------------------
+
+		lda <adr.match2
+		sta NMI.sfx_match_audf
+		sta NMI.sfx_match_audc
+
+		lda >adr.match2
+		sta NMI.sfx_match_audf+1
+		sta NMI.sfx_match_audc+1
+	
+	jmp a_0007
+l_0D99
+
+; -------------------  ASM Block 00000140  -------------------
+
+		lda <adr.match3
+		sta NMI.sfx_match_audf
+		sta NMI.sfx_match_audc
+
+		lda >adr.match3
+		sta NMI.sfx_match_audf+1
+		sta NMI.sfx_match_audc+1
+	
+a_0007
+
+; optimize FAIL (0, block_attack.pas), line = 911
+
+	inc MATCH
+
+; optimize OK (block_attack.pas), line = 913
+
+	lda #$01
+	sta MATCH_PLAY
+
+; ------------------------------------------------------------
+
+@CASETMP_0007	= DATAORIGIN+$019F
+
+@VarData	= @CASETMP_0007
+@VarDataSize	= 1
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	UPDATETILES					; PROCEDURE
+
+; optimize OK (block_attack.pas), line = 923
+
+	lda #$00
+	sta TICK
+
+; optimize OK (block_attack.pas), line = 925
+
+	mwy VRAM :bp2
+	ldy #$00
+	lda (:bp2),y
+	iny
+	add #$04
+	sta P
+	lda (:bp2),y
+	adc #$00
+	sta P+1
+
+; optimize OK (block_attack.pas), line = 927
+
+	lda CNTROW
+	jeq l_0DCA
+	lda P
+	sub #$28
+	sta P
+	scs
+	dec P+1
+l_0DCA
+
+; optimize OK (block_attack.pas), line = 929
+
+	lda #$00
+	sta K
+
+; optimize OK (block_attack.pas), line = 931
+
+	lda #$0F
+	sta J
+
+l_0DDB
+; --- ForToDoCondition
+	lda P
+	sta DRAWHORIZONTALTILES.P
+	lda P+1
+	sta DRAWHORIZONTALTILES.P+1
+	lda K
+	sta DRAWHORIZONTALTILES.K
+	jsr DRAWHORIZONTALTILES
+
+; optimize OK (block_attack.pas), line = 935
+
+	lda K
+	add #$06
+	sta K
+
+; optimize OK (block_attack.pas), line = 936
+
+	lda P
+	add #$50
+	sta P
+	scc
+	inc P+1
+
+; --- ForToDoEpilog
+	dec J
+	jpl l_0DDB
+l_0DE9
+
+; ------------------------------------------------------------
+
+P	= $E0
+J	= DATAORIGIN+$01A0
+K	= DATAORIGIN+$01A1
+
+@VarData	= J
+@VarDataSize	= 2
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	FINDTHREEINROW					; FUNCTION
+
+	jmp l_0DFA
+
+.local	HORIZONTAL					; PROCEDURE
+	sta N
+
+; optimize OK (block_attack.pas), line = 954
+
+	ldy #$00
+	lda (P),y
+	and #$7F
+	sta A
+
+; optimize OK (block_attack.pas), line = 956
+
+	cmp #$07
+	jcs l_0E1A
+
+; optimize OK (block_attack.pas), line = 957
+
+	cmp #$01
+	jcc l_0E2D
+
+; optimize OK (block_attack.pas), line = 958
+
+	iny
+	lda (P),y
+	and #$7F
+	cmp A
+	jne l_0E47
+
+; optimize OK (block_attack.pas), line = 959
+
+	lda (P),y
+	iny
+	eor (P),y
+	and #$7F
+	jne l_0E66
+
+; optimize OK (block_attack.pas), line = 961
+
+	lda A
+	ora #$80
+	ldy #$00
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 962
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 963
+
+	dey
+	lda (P),y
+	ldy #$02
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 965
+
+	lda #$01
+	sta OK
+l_0E66
+l_0E47
+l_0E2D
+l_0E1A
+
+; ------------------------------------------------------------
+
+N	= DATAORIGIN+$01A5
+A	= DATAORIGIN+$01A6
+
+@VarData	= N
+@VarDataSize	= 2
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	VERTICAL					; PROCEDURE
+
+; optimize OK (block_attack.pas), line = 976
+
+	ldy #$00
+	lda (P),y
+	and #$7F
+	sta A
+
+; optimize OK (block_attack.pas), line = 978
+
+	cmp #$07
+	jcs l_0EAF
+
+; optimize OK (block_attack.pas), line = 979
+
+	cmp #$01
+	jcc l_0EC2
+
+; optimize OK (block_attack.pas), line = 980
+
+	ldy #$06
+	lda (P),y
+	and #$7F
+	cmp A
+	jne l_0EDC
+
+; optimize OK (block_attack.pas), line = 981
+
+	lda (P),y
+	ldy #$0C
+	eor (P),y
+	and #$7F
+	jne l_0EFB
+
+; optimize OK (block_attack.pas), line = 983
+
+	lda A
+	ora #$80
+	ldy #$00
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 984
+
+	ldy #$06
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 985
+
+	ldy #$00
+	lda (P),y
+	ldy #$0C
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 987
+
+	lda #$01
+	sta OK
+l_0EFB
+l_0EDC
+l_0EC2
+l_0EAF
+
+; ------------------------------------------------------------
+
+A	= DATAORIGIN+$01A7
+
+@VarData	= A
+@VarDataSize	= 1
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+l_0DFA
+
+; optimize OK (block_attack.pas), line = 996
+
+	lda #$00
+	sta OK
+
+; optimize OK (block_attack.pas), line = 998
+
+	lda PLAYFIELD
+	sta Q
+	lda PLAYFIELD+1
+	sta Q+1
+
+; optimize OK (block_attack.pas), line = 1000
+
+	lda #$0E
+	sta I
+
+l_0F36
+; --- ForToDoCondition
+	lda Q
+	sta P
+	lda Q+1
+	sta P+1
+
+; optimize OK (block_attack.pas), line = 1003
+
+	lda #$00
+	jsr HORIZONTAL
+
+; optimize FAIL (0, block_attack.pas), line = 1004
+
+	inc P
+	sne
+	inc P+1
+	lda #$01
+	jsr HORIZONTAL
+
+; optimize FAIL (0, block_attack.pas), line = 1005
+
+	inc P
+	sne
+	inc P+1
+	lda #$02
+	jsr HORIZONTAL
+
+; optimize FAIL (0, block_attack.pas), line = 1006
+
+	inc P
+	sne
+	inc P+1
+	lda #$03
+	jsr HORIZONTAL
+
+; optimize OK (block_attack.pas), line = 1008
+
+	lda Q
+	add #$06
+	sta Q
+	scc
+	inc Q+1
+
+; --- ForToDoEpilog
+	dec I
+	jpl l_0F36
+l_0F44
+
+; optimize OK (block_attack.pas), line = 1012
+
+	lda PLAYFIELD
+	sta Q
+	lda PLAYFIELD+1
+	sta Q+1
+
+; optimize OK (block_attack.pas), line = 1014
+
+	lda #$0C
+	sta I
+
+l_0F71
+; --- ForToDoCondition
+	lda Q
+	sta P
+	lda Q+1
+	sta P+1
+
+; optimize FAIL ('VERTICAL', block_attack.pas), line = 1018
+
+	jsr VERTICAL
+	inc P
+	sne
+	inc P+1
+
+; optimize FAIL ('VERTICAL', block_attack.pas), line = 1019
+
+	jsr VERTICAL
+	inc P
+	sne
+	inc P+1
+
+; optimize FAIL ('VERTICAL', block_attack.pas), line = 1020
+
+	jsr VERTICAL
+	inc P
+	sne
+	inc P+1
+
+; optimize FAIL ('VERTICAL', block_attack.pas), line = 1021
+
+	jsr VERTICAL
+	inc P
+	sne
+	inc P+1
+
+; optimize FAIL ('VERTICAL', block_attack.pas), line = 1022
+
+	jsr VERTICAL
+	inc P
+	sne
+	inc P+1
+
+; optimize FAIL ('VERTICAL', block_attack.pas), line = 1023
+
+	jsr VERTICAL
+
+; optimize OK (block_attack.pas), line = 1025
+
+	lda Q
+	add #$06
+	sta Q
+	scc
+	inc Q+1
+
+; --- ForToDoEpilog
+	dec I
+	jpl l_0F71
+l_0F7F
+
+; optimize OK (block_attack.pas), line = 1029
+
+	lda OK
+	jeq l_0FB0
+	jsr UPDATETILES
+l_0FB0
+
+; optimize OK (block_attack.pas), line = 1031
+
+	lda OK
+	sta RESULT
+@exit
+
+; ------------------------------------------------------------
+
+RESULT	= DATAORIGIN+$01A2
+I	= DATAORIGIN+$01A3
+OK	= DATAORIGIN+$01A4
+P	= $E0
+Q	= $E2
+
+@VarData	= I
+@VarDataSize	= 2
+
+	rts						; ret
+.endl
+
+.local	DOSCORE						; FUNCTION
+
+; optimize OK (block_attack.pas), line = 1040
+
+	lda #$00
+	sta RESULT
+
+; optimize OK (block_attack.pas), line = 1042
+
+	lda MATCH_PLAY
+	jeq l_0FCE
+	jmp @exit
+l_0FCE
+
+; optimize FAIL (0, block_attack.pas), line = 1044
+
+	inc CNTFOUND
+
+; optimize OK (block_attack.pas), line = 1046
+
+	lda CNTFOUND
+	cmp #$10
+	jcc l_0FE7
+
+; optimize OK (block_attack.pas), line = 1048
+
+	lda #$00
+	sta K
+
+l_0FF1
+; --- ForToDoCondition
+	ldy K
+	cpy #$5A
+	jcs l_0FFF
+
+; optimize OK (block_attack.pas), line = 1049
+
+	lda adr.PLAYFIELD,y
+	jpl l_1014
+
+; optimize OK (block_attack.pas), line = 1051
+
+	lda #$00
+	sta adr.PLAYFIELD,y
+
+; optimize OK (block_attack.pas), line = 1053
+
+	lda #$0D
+	sta CNTFOUND
+
+; optimize FAIL (0, block_attack.pas), line = 1055
+
+	inc FOUND
+
+; optimize OK (block_attack.pas), line = 1057
+
+	lda SCORE
+	add #$05
+	sta SCORE
+	lda SCORE+1
+	adc #$00
+	sta SCORE+1
+	lda SCORE+2
+	adc #$00
+	sta SCORE+2
+	lda SCORE+3
+	adc #$00
+	sta SCORE+3
+
+; optimize FAIL ('SFX_MATCH', block_attack.pas), line = 1059
+
+	jsr SFX_MATCH
+
+; optimize OK (block_attack.pas), line = 1061
+
+	lda #$01
+	sta MONSTER_SCORE
+
+; optimize FAIL ('PRINTSCORE', block_attack.pas), line = 1063
+
+	jsr PRINTSCORE
+	jmp @exit
+l_1014
+
+; --- ForToDoEpilog
+	inc K
+	jne l_0FF1
+l_0FFF
+
+; optimize OK (block_attack.pas), line = 1069
+
+	lda #$00
+	sta MATCH
+
+; optimize OK (block_attack.pas), line = 1071
+
+	sta FOUNDTHREE
+
+; optimize OK (block_attack.pas), line = 1072
+
+	sta CNTFOUND
+
+; optimize OK (block_attack.pas), line = 1074
+
+	lda #$01
+	sta RESULT
+l_0FE7
+
+; optimize OK (block_attack.pas), line = 1079
+
+	lda SCORE+3
+	cmp HISCORE+3
+	bne @+
+	lda SCORE+2
+	cmp HISCORE+2
+	bne @+
+	lda SCORE+1
+	cmp HISCORE+1
+	bne @+
+	lda SCORE
+	cmp HISCORE
+@
+	jcc l_1054
+	jeq l_1054
+
+; optimize OK (block_attack.pas), line = 1081
+
+	lda SCORE
+	sta HISCORE
+	lda SCORE+1
+	sta HISCORE+1
+	lda SCORE+2
+	sta HISCORE+2
+	lda SCORE+3
+	sta HISCORE+3
+
+; optimize FAIL ('PRINTHISCORE', block_attack.pas), line = 1083
+
+	jsr PRINTHISCORE
+l_1054
+@exit
+
+; ------------------------------------------------------------
+
+RESULT	= DATAORIGIN+$01A8
+K	= DATAORIGIN+$01A9
+
+@VarData	= K
+@VarDataSize	= 1
+
+	rts						; ret
+.endl
+
+.local	PRINTALLSCORES					; PROCEDURE
+
+; optimize FAIL ('PRINTSCORE', block_attack.pas), line = 1093
+
+	jsr PRINTSCORE
+
+; optimize OK (block_attack.pas), line = 1095
+
+	lda SCORE+3
+	cmp HISCORE+3
+	bne @+
+	lda SCORE+2
+	cmp HISCORE+2
+	bne @+
+	lda SCORE+1
+	cmp HISCORE+1
+	bne @+
+	lda SCORE
+	cmp HISCORE
+@
+	jcc l_1071
+	jeq l_1071
+
+; optimize OK (block_attack.pas), line = 1096
+
+	lda SCORE
+	sta HISCORE
+	lda SCORE+1
+	sta HISCORE+1
+	lda SCORE+2
+	sta HISCORE+2
+	lda SCORE+3
+	sta HISCORE+3
+
+; optimize FAIL ('PRINTHISCORE', block_attack.pas), line = 1097
+
+	jsr PRINTHISCORE
+l_1071
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	COMBOSCORE					; PROCEDURE
+
+; optimize OK (block_attack.pas), line = 1106
+
+	lda FOUND
+	lsr @
+	lsr @
+	add #$01
+	sta TMP
+
+; optimize OK (block_attack.pas), line = 1108
+
+	lda SCROLLFREEZE+1
+	cmp #$FF
+	jcs l_109C
+	lda TMP
+	sta :STACKORIGIN+STACKWIDTH+9
+	lda #$00
+	lsr :STACKORIGIN+STACKWIDTH+9
+	ror @
+	lsr :STACKORIGIN+STACKWIDTH+9
+	ror @
+	add SCROLLFREEZE
+	sta SCROLLFREEZE
+	lda SCROLLFREEZE+1
+	adc :STACKORIGIN+STACKWIDTH+9
+	sta SCROLLFREEZE+1
+l_109C
+
+; optimize OK (block_attack.pas), line = 1110
+
+	lda TMP
+	asl @
+	asl @
+	add TMP
+	sta TMP
+
+; optimize OK (block_attack.pas), line = 1111
+
+	lda SCORE
+	add TMP
+	sta SCORE
+	lda SCORE+1
+	adc #$00
+	sta SCORE+1
+	lda SCORE+2
+	adc #$00
+	sta SCORE+2
+	lda SCORE+3
+	adc #$00
+	sta SCORE+3
+
+; optimize FAIL ('PRINTALLSCORES', block_attack.pas), line = 1113
+
+	jsr PRINTALLSCORES
+
+; ------------------------------------------------------------
+
+TMP	= DATAORIGIN+$01AA
+
+@VarData	= TMP
+@VarDataSize	= 1
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	NEWROWWITHRANDOMSET				; PROCEDURE
+
+; optimize OK (block_attack.pas), line = 1123
+
+	lda #$FF
+	sta A_
+
+; optimize OK (block_attack.pas), line = 1125
+
+	lda #$05
+	sta I
+
+l_10C5
+; --- ForToDoCondition
+	lda #$06
+	jsr SYSTEM.RANDOM_0170
+	lda SYSTEM.RANDOM_0170.RESULT
+	sta A
+
+; optimize OK (block_attack.pas), line = 1129
+
+	lda I
+	cmp #$05
+	jcs l_10EA
+
+; --- WhileProlog
+	jmp l_10ED
+l_10EE
+
+; optimize OK (block_attack.pas), line = 1130
+
+	lda #$06
+	jsr SYSTEM.RANDOM_0170
+	lda SYSTEM.RANDOM_0170.RESULT
+	sta A
+l_10ED
+	lda A
+	cmp A_
+	jeq l_10EE
+	ldy I
+	lda adr.TMP+$01,y
+	cmp A
+	jeq l_10EE
+l_10EA
+
+; optimize OK (block_attack.pas), line = 1132
+
+	lda A
+	sta A_
+
+; optimize OK (block_attack.pas), line = 1134
+
+	ldy I
+	sta adr.TMP,y
+
+; optimize OK (block_attack.pas), line = 1136
+
+	add #$13
+	sta A
+
+; optimize OK (block_attack.pas), line = 1138
+
+	lda adr.PLAYFIELD+$54,y
+	sta K
+
+; optimize OK (block_attack.pas), line = 1140
+
+	cmp A
+	jne l_114D
+
+; optimize OK (block_attack.pas), line = 1141
+
+	lda A
+	cmp #$18
+	jcs l_1160
+
+; optimize FAIL (0, block_attack.pas), line = 1142
+
+	inc A
+	jmp l_116E
+l_1160
+
+; optimize FAIL (0, block_attack.pas), line = 1144
+
+	dec A
+l_116E
+l_114D
+
+; optimize OK (block_attack.pas), line = 1146
+
+	ldy I
+	lda A
+	sta adr.PLAYFIELD+$5A,y
+
+; --- ForToDoEpilog
+	dec I
+	jpl l_10C5
+l_10D3
+
+; optimize OK (block_attack.pas), line = 1151
+
+	lda adr.PLAYFIELD+$4E
+	cmp #$13
+	jcc l_119D
+
+; optimize OK (block_attack.pas), line = 1152
+
+	sub #$12
+	sta adr.PLAYFIELD+$4E
+
+; optimize OK (block_attack.pas), line = 1153
+
+	lda adr.PLAYFIELD+$4F
+	sub #$12
+	sta adr.PLAYFIELD+$4F
+
+; optimize OK (block_attack.pas), line = 1154
+
+	lda adr.PLAYFIELD+$50
+	sub #$12
+	sta adr.PLAYFIELD+$50
+
+; optimize OK (block_attack.pas), line = 1155
+
+	lda adr.PLAYFIELD+$51
+	sub #$12
+	sta adr.PLAYFIELD+$51
+
+; optimize OK (block_attack.pas), line = 1156
+
+	lda adr.PLAYFIELD+$52
+	sub #$12
+	sta adr.PLAYFIELD+$52
+
+; optimize OK (block_attack.pas), line = 1157
+
+	lda adr.PLAYFIELD+$53
+	sub #$12
+	sta adr.PLAYFIELD+$53
+l_119D
+
+; optimize OK (block_attack.pas), line = 1161
+
+	mwy VRAM :bp2
+	ldy #$00
+	lda (:bp2),y
+	iny
+	add #$10
+	sta :STACKORIGIN+9
+	lda (:bp2),y
+	adc #$04
+	sta P+1
+	lda :STACKORIGIN+9
+	add #$04
+	sta P
+	scc
+	inc P+1
+
+; optimize OK (block_attack.pas), line = 1163
+
+	lda #$4E
+	sta K
+
+; optimize OK (block_attack.pas), line = 1164
+
+	lda P
+	sta DRAWHORIZONTALTILES.P
+	lda P+1
+	sta DRAWHORIZONTALTILES.P+1
+	lda K
+	sta DRAWHORIZONTALTILES.K
+	jsr DRAWHORIZONTALTILES
+
+; optimize OK (block_attack.pas), line = 1166
+
+	lda P
+	add #$50
+	sta P
+	scc
+	inc P+1
+
+; optimize OK (block_attack.pas), line = 1167
+
+	lda K
+	add #$06
+	sta K
+
+; optimize OK (block_attack.pas), line = 1169
+
+	lda P
+	sta DRAWHORIZONTALTILES.P
+	lda P+1
+	sta DRAWHORIZONTALTILES.P+1
+	lda K
+	sta DRAWHORIZONTALTILES.K
+	jsr DRAWHORIZONTALTILES
+
+; optimize OK (block_attack.pas), line = 1173
+
+	lda P
+	add #$18
+	sta P
+	scc
+	inc P+1
+
+; optimize OK (block_attack.pas), line = 1175
+
+	ldy #$00
+	tya
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1176
+
+	ldy #$01
+	lda #$FA
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1177
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1178
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1179
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1180
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1181
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1182
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1183
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1185
+
+	iny
+	lda #$00
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1186
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1187
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1188
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1189
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1190
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1191
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1193
+
+	lda P
+	add #$28
+	sta P
+	scc
+	inc P+1
+
+; optimize OK (block_attack.pas), line = 1195
+
+	ldy #$00
+	tya
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1196
+
+	ldy #$01
+	lda #$FA
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1197
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1198
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1199
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1200
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1201
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1202
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1203
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1205
+
+	iny
+	lda #$00
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1206
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1207
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1208
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1209
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1210
+
+	iny
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1211
+
+	iny
+	sta (P),y
+
+; ------------------------------------------------------------
+
+I	= DATAORIGIN+$01AB
+A	= DATAORIGIN+$01AC
+A_	= DATAORIGIN+$01AD
+K	= DATAORIGIN+$01AE
+P	= $E0
+adr.TMP	= [DATAORIGIN+$01AF] .array [6]
+.var TMP	= adr.TMP .word
+
+@VarData	= I
+@VarDataSize	= 10
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	MOVEUPPLAYFIELD					; PROCEDURE | ASSEMBLER
+
+; -------------------  ASM Block 00000141  -------------------
+
+	ldy #0
+@:	lda adr.playfield+6,y
+	sta adr.playfield,y
+	iny
+	cpy #15*6
+	bne @-
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	SWITCHCHARSET					; PROCEDURE | ASSEMBLER
+
+; -------------------  ASM Block 00000142  -------------------
+
+	lda JGPFirstCharset
+	eor #4
+	sta JGPFirstCharset
+	sta JGPCharset
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	SELECTBOX					; PROCEDURE
+
+; optimize OK (block_attack.pas), line = 1240
+
+	lda <adr.MISSILE
+	add YOLD
+	sta :bp2
+	lda >adr.MISSILE
+	adc #$00
+	sta :bp2+1
+	lda #$00
+	ldy #$10
+	sta:rpl (:bp2),y-
+
+; optimize OK (block_attack.pas), line = 1242
+
+	lda YSEL
+	asl @
+	asl @
+	asl @
+	asl @
+	add #$18
+	sta A
+
+; optimize OK (block_attack.pas), line = 1244
+
+	lda SCROLL
+	jne l_129D
+	lda A
+	sub YSHIFT
+	sta A
+l_129D
+
+; optimize OK (block_attack.pas), line = 1246
+
+	lda A
+	sta YOLD
+
+; optimize OK (block_attack.pas), line = 1248
+
+	ldy A
+	lda #$99
+	sta adr.MISSILE,y
+
+; optimize OK (block_attack.pas), line = 1249
+
+	lda #$FF
+	sta adr.MISSILE+$01,y
+
+; optimize OK (block_attack.pas), line = 1250
+
+	sta adr.MISSILE+$02,y
+
+; optimize OK (block_attack.pas), line = 1251
+
+	lda #$66
+	sta adr.MISSILE+$03,y
+
+; optimize OK (block_attack.pas), line = 1253
+
+	lda #$42
+	sta adr.MISSILE+$04,y
+
+; optimize OK (block_attack.pas), line = 1254
+
+	sta adr.MISSILE+$05,y
+
+; optimize OK (block_attack.pas), line = 1255
+
+	sta adr.MISSILE+$06,y
+
+; optimize OK (block_attack.pas), line = 1256
+
+	sta adr.MISSILE+$07,y
+
+; optimize OK (block_attack.pas), line = 1257
+
+	sta adr.MISSILE+$08,y
+
+; optimize OK (block_attack.pas), line = 1258
+
+	sta adr.MISSILE+$09,y
+
+; optimize OK (block_attack.pas), line = 1259
+
+	sta adr.MISSILE+$0A,y
+
+; optimize OK (block_attack.pas), line = 1260
+
+	sta adr.MISSILE+$0B,y
+
+; optimize OK (block_attack.pas), line = 1261
+
+	sta adr.MISSILE+$0C,y
+
+; optimize OK (block_attack.pas), line = 1263
+
+	lda #$66
+	sta adr.MISSILE+$0D,y
+
+; optimize OK (block_attack.pas), line = 1264
+
+	lda #$FF
+	sta adr.MISSILE+$0E,y
+
+; optimize OK (block_attack.pas), line = 1265
+
+	sta adr.MISSILE+$0F,y
+
+; optimize OK (block_attack.pas), line = 1266
+
+	lda #$99
+	sta adr.MISSILE+$10,y
+
+; optimize OK (block_attack.pas), line = 1268
+
+	lda XSEL
+	asl @
+	asl @
+	asl @
+	asl @
+	add #$30
+	add #$10
+	sta A
+
+; optimize OK (block_attack.pas), line = 1271
+
+	sta LEFT_EDGE
+
+; optimize OK (block_attack.pas), line = 1273
+
+	add #$0F
+	sta ATARI.HPOSM1
+
+; optimize OK (block_attack.pas), line = 1274
+
+	lda A
+	add #$10
+	sta ATARI.HPOSM2
+
+; optimize OK (block_attack.pas), line = 1277
+
+	lda A
+	add #$20
+	sta RIGHT_EDGE
+
+; ------------------------------------------------------------
+
+A	= DATAORIGIN+$01B5
+
+@VarData	= A
+@VarDataSize	= 1
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	ONSCROLL					; PROCEDURE
+
+; optimize FAIL ('PANELUPDATE', block_attack.pas), line = 1285
+
+	jsr PANELUPDATE
+
+; optimize OK (block_attack.pas), line = 1287
+
+	lda #$00
+	sta SCROLLUP
+
+; optimize OK (block_attack.pas), line = 1289
+
+	lda VSC
+	add #$01
+	and #$07
+	sta VSC
+
+; optimize OK (block_attack.pas), line = 1291
+
+	sta ATARI.VSCROL
+
+; optimize OK (block_attack.pas), line = 1293
+
+	lda VSC
+	jne l_13C5
+
+; optimize OK (block_attack.pas), line = 1295
+
+	mwy VRAM :bp2
+	ldy #$00
+	lda (:bp2),y
+	add #$28
+	sta (:bp2),y
+	iny
+	lda (:bp2),y
+	adc #$00
+	sta (:bp2),y
+
+; optimize FAIL ('SWITCHCHARSET', block_attack.pas), line = 1297
+
+	jsr SWITCHCHARSET
+
+; optimize OK (block_attack.pas), line = 1299
+
+	lda CNTROW
+	eor #$01
+	sta CNTROW
+
+; optimize OK (block_attack.pas), line = 1301
+
+	jne l_13E4
+
+; optimize OK (block_attack.pas), line = 1304
+
+	mwy VRAM :bp2
+	lda ATARI.SAVMSC
+	add #$80
+	sta :STACKORIGIN+10
+	lda ATARI.SAVMSC+1
+	adc #$02
+	ldy #$01
+	cmp (:bp2),y
+	bne @+
+	dey
+	lda :STACKORIGIN+10
+	cmp (:bp2),y
+@
+	jcs l_13FF
+
+; optimize OK (block_attack.pas), line = 1306
+
+	lda ATARI.SAVMSC+1
+	eor #$70
+	sta ATARI.SAVMSC+1
+
+; optimize OK (block_attack.pas), line = 1308
+
+	lda ATARI.SAVMSC
+	add #$50
+	sta SYSTEM.MOVE_0143.DEST
+	lda ATARI.SAVMSC+1
+	adc #$00
+	sta SYSTEM.MOVE_0143.DEST+1
+	ldy #$00
+	lda (:bp2),y
+	sta SYSTEM.MOVE_0143.SOURCE
+	iny
+	lda (:bp2),y
+	sta SYSTEM.MOVE_0143.SOURCE+1
+	lda #$00
+	sta SYSTEM.MOVE_0143.COUNT
+	lda #$05
+	sta SYSTEM.MOVE_0143.COUNT+1
+	.LOCAL +MAIN.SYSTEM.MOVE_0143
+	m@INLINE
+	.ENDL
+
+; optimize OK (block_attack.pas), line = 1310
+
+	mwy VRAM :bp2
+	ldy #$00
+	lda ATARI.SAVMSC
+	add #$50
+	sta (:bp2),y
+	iny
+	lda ATARI.SAVMSC+1
+	adc #$00
+	sta (:bp2),y
+l_13FF
+
+; optimize OK (block_attack.pas), line = 1317
+
+	lda SCROLL
+	jeq l_1434
+	dec SCROLL
+l_1434
+
+; optimize FAIL ('MOVEUPPLAYFIELD', block_attack.pas), line = 1319
+
+	jsr MOVEUPPLAYFIELD
+
+; optimize FAIL ('NEWROWWITHRANDOMSET', block_attack.pas), line = 1321
+
+	jsr NEWROWWITHRANDOMSET
+
+; optimize OK (block_attack.pas), line = 1325
+
+	lda #$00
+	sta SHIFTKEY
+l_13E4
+l_13C5
+
+; optimize OK (block_attack.pas), line = 1331
+
+	lda SCROLL
+	jne l_1457
+
+; optimize FAIL (0, block_attack.pas), line = 1333
+
+	inc YSHIFT
+
+; optimize OK (block_attack.pas), line = 1335
+
+	lda YSHIFT
+	cmp #$10
+	jcc l_146E
+
+; optimize OK (block_attack.pas), line = 1336
+
+	lda YSEL
+	cmp #$01
+	jcc l_1481
+	dec YSEL
+l_1481
+
+; optimize OK (block_attack.pas), line = 1337
+
+	lda #$00
+	sta YSHIFT
+l_146E
+	jmp l_1497
+l_1457
+
+; optimize OK (block_attack.pas), line = 1341
+
+	lda VSC
+	sta YSHIFT
+l_1497
+
+; optimize FAIL ('SELECTBOX', block_attack.pas), line = 1343
+
+	jsr SELECTBOX
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	SWAPTILESON					; PROCEDURE
+
+; optimize OK (block_attack.pas), line = 1351
+
+	ldy YSEL
+	iny
+	sty I
+
+; optimize OK (block_attack.pas), line = 1353
+
+	lda YSHIFT
+	cmp #$08
+	jcc l_14BE
+	dec I
+l_14BE
+
+; optimize OK (block_attack.pas), line = 1355
+
+	lda I
+	asl @
+	sta Y
+
+; optimize OK (block_attack.pas), line = 1357
+
+	lda I
+	asl @
+	asl @
+	sta :STACKORIGIN+9
+	lda I
+	asl @
+	add :STACKORIGIN+9
+	add XSEL
+	sta I
+
+; optimize OK (block_attack.pas), line = 1359
+
+	tay
+	lda adr.PLAYFIELD,y
+	sta A
+
+; optimize OK (block_attack.pas), line = 1360
+
+	lda adr.PLAYFIELD+$01,y
+	sta B
+
+; optimize OK (block_attack.pas), line = 1362
+
+	lda A
+	cmp #$07
+	jcs l_1511
+
+; optimize OK (block_attack.pas), line = 1363
+
+	lda B
+	cmp #$07
+	jcs l_1524
+
+; optimize OK (block_attack.pas), line = 1364
+
+	lda A
+	ora B
+	jeq l_153D
+
+; optimize OK (block_attack.pas), line = 1365
+
+	lda I
+	sta SWAPTILES.INDEX
+
+; optimize OK (block_attack.pas), line = 1366
+
+	lda #$04
+	sta SWAPTILES.STAGE
+
+; optimize OK (block_attack.pas), line = 1368
+
+	lda A
+	jsr TILECODE
+	lda TILECODE.RESULT
+	sta SWAPTILES.TILE0
+
+; optimize OK (block_attack.pas), line = 1369
+
+	lda B
+	jsr TILECODE
+	lda TILECODE.RESULT
+	sta SWAPTILES.TILE1
+
+; optimize OK (block_attack.pas), line = 1371
+
+	mwy VRAM :bp2
+	ldy #$00
+	lda (:bp2),y
+	sta :STACKORIGIN+9
+	iny
+	lda (:bp2),y
+	sta :STACKORIGIN+STACKWIDTH+9
+	lda Y
+	jsr @mul40
+	add :STACKORIGIN+9
+	sta :STACKORIGIN+9
+	lda :STACKORIGIN+STACKWIDTH+9
+	adc :eax+1
+	sta :STACKORIGIN+STACKWIDTH+9
+	lda #$00
+	sta :STACKORIGIN+STACKWIDTH+10
+	lda XSEL
+	asl @
+	rol :STACKORIGIN+STACKWIDTH+10
+	asl @
+	rol :STACKORIGIN+STACKWIDTH+10
+	add :STACKORIGIN+9
+	tay
+	lda :STACKORIGIN+STACKWIDTH+9
+	adc :STACKORIGIN+STACKWIDTH+10
+	sta SWAPTILES.P+1
+	tya
+	add #$04
+	sta SWAPTILES.P
+	scc
+	inc SWAPTILES.P+1
+l_153D
+l_1524
+l_1511
+
+; ------------------------------------------------------------
+
+I	= DATAORIGIN+$01B6
+A	= DATAORIGIN+$01B7
+B	= DATAORIGIN+$01B8
+Y	= DATAORIGIN+$01B9
+
+@VarData	= I
+@VarDataSize	= 4
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	CLEARTILE					; PROCEDURE
+
+; optimize OK (block_attack.pas), line = 1380
+
+	ldy P+1
+	sty :bp+1
+	ldy P
+	lda #$00
+	sta (:bp),y
+
+; optimize OK (block_attack.pas), line = 1381
+
+	mwy P :bp2
+	ldy #$01
+	sta (:bp2),y
+
+; optimize OK (block_attack.pas), line = 1382
+
+	iny
+	sta (:bp2),y
+
+; optimize OK (block_attack.pas), line = 1383
+
+	iny
+	sta (:bp2),y
+
+; optimize OK (block_attack.pas), line = 1385
+
+	ldy #$28
+	sta (:bp2),y
+
+; optimize OK (block_attack.pas), line = 1386
+
+	iny
+	sta (:bp2),y
+
+; optimize OK (block_attack.pas), line = 1387
+
+	iny
+	sta (:bp2),y
+
+; optimize OK (block_attack.pas), line = 1388
+
+	iny
+	sta (:bp2),y
+
+; ------------------------------------------------------------
+
+P	= DATAORIGIN+$01BA
+
+@VarData	= P
+@VarDataSize	= 2
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	DRAWTILE					; PROCEDURE | REGISTER
+
+; optimize OK (block_attack.pas), line = 1395
+
+	lda C
+	cmp #$01
+	jcc l_15BB
+
+; optimize OK (block_attack.pas), line = 1396
+
+	ldy #$00
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1397
+
+	ldy #$28
+	sta (P),y
+
+; optimize FAIL (0, block_attack.pas), line = 1399
+
+	inc C
+
+; optimize OK (block_attack.pas), line = 1401
+
+	ldy #$01
+	lda C
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1402
+
+	ldy #$29
+	sta (P),y
+
+; optimize FAIL (0, block_attack.pas), line = 1404
+
+	inc C
+
+; optimize OK (block_attack.pas), line = 1406
+
+	ldy #$02
+	lda C
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1407
+
+	ldy #$2A
+	sta (P),y
+
+; optimize FAIL (0, block_attack.pas), line = 1409
+
+	inc C
+
+; optimize OK (block_attack.pas), line = 1411
+
+	ldy #$03
+	lda C
+	sta (P),y
+
+; optimize OK (block_attack.pas), line = 1412
+
+	ldy #$2B
+	sta (P),y
+l_15BB
+
+; ------------------------------------------------------------
+
+P	= :EDX
+C	= :ECX
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	ONSWAP						; PROCEDURE
+
+; optimize OK (block_attack.pas), line = 1423
+
+	lda SWAPTILES.P
+	sta P
+	lda SWAPTILES.P+1
+	sta P+1
+
+; optimize OK (block_attack.pas), line = 1425
+
+	lda CNTROW
+	jeq l_161D
+	lda P
+	sub #$28
+	sta P
+	scs
+	dec P+1
+l_161D
+
+; optimize OK (block_attack.pas), line = 1427
+
+	lda P
+	sta CLEARTILE.P
+	lda P+1
+	sta CLEARTILE.P+1
+	jsr CLEARTILE
+
+; optimize OK (block_attack.pas), line = 1429
+
+	lda P
+	add #$04
+	sta P
+	scc
+	inc P+1
+
+; optimize OK (block_attack.pas), line = 1430
+
+	sta CLEARTILE.P
+	lda P+1
+	sta CLEARTILE.P+1
+	jsr CLEARTILE
+
+; optimize OK (block_attack.pas), line = 1432
+
+	lda SWAPTILES.STAGE
+	sta @CASETMP_0008
+	cmp #$04
+	jne l_1633
+@
+
+; optimize FAIL (0, block_attack.pas), line = 1434
+
+	lda P
+	bne @+
+	dec P+1
+@
+	dec P
+
+; optimize OK (block_attack.pas), line = 1435
+
+	lda P
+	sta DRAWTILE.P
+	lda P+1
+	sta DRAWTILE.P+1
+	lda SWAPTILES.TILE1
+	sta DRAWTILE.C
+	jsr DRAWTILE
+
+; optimize OK (block_attack.pas), line = 1436
+
+	lda P
+	sub #$02
+	sta P
+	scs
+	dec P+1
+
+; optimize OK (block_attack.pas), line = 1437
+
+	sta DRAWTILE.P
+	lda P+1
+	sta DRAWTILE.P+1
+	lda SWAPTILES.TILE0
+	sta DRAWTILE.C
+	jsr DRAWTILE
+
+; optimize OK (block_attack.pas), line = 1439
+
+	lda #$01
+	sta SWAP_PLAY
+
+	jmp a_0008
+l_1633
+	cmp #$03
+	jne l_1651
+@
+
+; optimize OK (block_attack.pas), line = 1443
+
+	lda P
+	sub #$02
+	sta P
+	scs
+	dec P+1
+
+; optimize OK (block_attack.pas), line = 1444
+
+	sta DRAWTILE.P
+	lda P+1
+	sta DRAWTILE.P+1
+	lda SWAPTILES.TILE1
+	sta DRAWTILE.C
+	jsr DRAWTILE
+
+; optimize OK (block_attack.pas), line = 1446
+
+	lda P
+	sta DRAWTILE.P
+	lda P+1
+	sta DRAWTILE.P+1
+	lda SWAPTILES.TILE0
+	sta DRAWTILE.C
+	jsr DRAWTILE
+
+	jmp a_0008
+l_1651
+	cmp #$02
+	jne l_1667
+@
+
+; optimize OK (block_attack.pas), line = 1450
+
+	lda P
+	sub #$02
+	sta P
+	scs
+	dec P+1
+
+; optimize OK (block_attack.pas), line = 1451
+
+	sta DRAWTILE.P
+	lda P+1
+	sta DRAWTILE.P+1
+	lda SWAPTILES.TILE0
+	sta DRAWTILE.C
+	jsr DRAWTILE
+
+	jmp a_0008
+l_1667
+	cmp #$01
+	jne l_1677
+@
+
+; optimize OK (block_attack.pas), line = 1455
+
+	lda P
+	sta DRAWTILE.P
+	lda P+1
+	sta DRAWTILE.P+1
+	lda SWAPTILES.TILE0
+	sta DRAWTILE.C
+	jsr DRAWTILE
+
+; optimize OK (block_attack.pas), line = 1456
+
+	lda P
+	sub #$04
+	sta P
+	scs
+	dec P+1
+
+; optimize OK (block_attack.pas), line = 1457
+
+	sta DRAWTILE.P
+	lda P+1
+	sta DRAWTILE.P+1
+	lda SWAPTILES.TILE1
+	sta DRAWTILE.C
+	jsr DRAWTILE
+
+; optimize OK (block_attack.pas), line = 1459
+
+	ldy SWAPTILES.INDEX
+	lda adr.PLAYFIELD,y
+	sta A
+
+; optimize OK (block_attack.pas), line = 1460
+
+	lda adr.PLAYFIELD+$01,y
+	sta B
+
+; optimize OK (block_attack.pas), line = 1462
+
+	sta adr.PLAYFIELD,y
+
+; optimize OK (block_attack.pas), line = 1463
+
+	lda A
+	sta adr.PLAYFIELD+$01,y
+
+; optimize FAIL ('UPDATETILES', block_attack.pas), line = 1465
+
+	jsr UPDATETILES
+
+; --- WhileProlog
+	jmp l_16B3
+l_16B4
+
+; optimize FAIL ('SYSTEM.PAUSE_016D', block_attack.pas), line = 1467
+
+	jsr SYSTEM.PAUSE_016D
+	jsr UPDATETILES
+l_16B3
+	jsr TILESFALLDOWN
+	lda TILESFALLDOWN.RESULT
+	jne l_16B4
+
+l_1677
+a_0008
+
+; optimize FAIL (0, block_attack.pas), line = 1473
+
+	dec SWAPTILES.STAGE
+
+; ------------------------------------------------------------
+
+P	= $E0
+A	= DATAORIGIN+$01BC
+B	= DATAORIGIN+$01BD
+@CASETMP_0008	= DATAORIGIN+$01BE
+
+@VarData	= A
+@VarDataSize	= 3
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	WARNINGJUMPS					; PROCEDURE
+
+; optimize OK (block_attack.pas), line = 1483
+
+	lda #$00
+	sta I
+
+l_16D3
+; --- ForToDoCondition
+	ldy I
+	cpy #$06
+	jcs l_16E1
+
+; optimize OK (block_attack.pas), line = 1485
+
+	lda adr.PLAYFIELD+$0C,y
+	jeq l_16FE
+
+; optimize OK (block_attack.pas), line = 1487
+
+	lda #$01
+	sta adr.JUMP,y
+	jmp l_170F
+l_16FE
+
+; optimize OK (block_attack.pas), line = 1491
+
+	ldy I
+	lda adr.JUMP,y
+	jeq l_171E
+
+; optimize OK (block_attack.pas), line = 1492
+
+	lda #$00
+	sta adr.JUMP,y
+
+; optimize OK (block_attack.pas), line = 1494
+
+	lda I
+	sta DRAWVERTICALJUMPTILES.X
+	lda #$00
+	sta DRAWVERTICALJUMPTILES.C
+	jsr DRAWVERTICALJUMPTILES
+l_170F
+l_171E
+
+; --- ForToDoEpilog
+	inc I
+	jne l_16D3
+l_16E1
+
+; optimize OK (block_attack.pas), line = 1502
+
+	lda #$00
+	sta FASTER
+
+; optimize OK (block_attack.pas), line = 1504
+
+	sta I
+
+l_173F
+; --- ForToDoCondition
+	ldy I
+	cpy #$06
+	jcs l_174D
+
+; optimize OK (block_attack.pas), line = 1505
+
+	lda adr.JUMP,y
+	jeq l_175C
+
+; optimize OK (block_attack.pas), line = 1506
+
+	lda #$01
+	sta FASTER
+
+; optimize OK (block_attack.pas), line = 1507
+
+	lda I
+	sta DRAWVERTICALJUMPTILES.X
+	lda TICK
+	sta DRAWVERTICALJUMPTILES.C
+	jsr DRAWVERTICALJUMPTILES
+l_175C
+
+; --- ForToDoEpilog
+	inc I
+	jne l_173F
+l_174D
+
+; optimize OK (block_attack.pas), line = 1511
+
+	lda MSX_FASTER
+	cmp FASTER
+	jeq l_1783
+
+; optimize OK (block_attack.pas), line = 1513
+
+	lda FASTER
+	jeq l_1790
+
+; GetResourceHandle
+	lda <MAIN.@RESOURCE.sapr_critical
+	sta MSX.MODUL
+	lda >MAIN.@RESOURCE.sapr_critical
+	jmp l_179A
+l_1790
+
+; GetResourceHandle
+	lda <MAIN.@RESOURCE.sapr_yoshi
+	sta MSX.MODUL
+	lda >MAIN.@RESOURCE.sapr_yoshi
+l_179A
+	sta MSX.MODUL+1
+
+; optimize OK (block_attack.pas), line = 1518
+
+	lda #$10
+	sta SAPLZSS.TLZSSPLAY.INIT.A
+	lda MSX
+	ldy MSX+1
+	jsr SAPLZSS.TLZSSPLAY.INIT
+l_1783
+
+; optimize OK (block_attack.pas), line = 1523
+
+	lda FASTER
+	sta MSX_FASTER
+
+; ------------------------------------------------------------
+
+I	= DATAORIGIN+$01BF
+FASTER	= DATAORIGIN+$01C0
+
+@VarData	= I
+@VarDataSize	= 2
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	CLEARGTIA					; PROCEDURE
+
+; optimize OK (block_attack.pas), line = 1533
+
+	lda #$00
+	sta P
+	lda #$D0
+	sta P+1
+
+; optimize OK (block_attack.pas), line = 1535
+
+	lda #$00
+	sta I
+
+l_17B5
+; --- ForToDoCondition
+	lda I
+	cmp #$1F
+	jcs l_17C3
+
+; optimize OK (block_attack.pas), line = 1536
+
+	ldy #1
+	cmp #$1A
+	beq @+
+	dey
+@
+	tya
+	asl @
+	ldy I
+	sta (P),y
+
+; --- ForToDoEpilog
+	inc I
+	jne l_17B5
+l_17C3
+
+; ------------------------------------------------------------
+
+P	= :STACKORIGIN-2
+I	= DATAORIGIN+$01C1
+
+@VarData	= I
+@VarDataSize	= 1
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	DOINITPMG					; PROCEDURE
+
+; optimize FAIL ('CLEARGTIA', block_attack.pas), line = 1545
+
+	jsr CLEARGTIA
+
+; GetResourceHandle
+	lda <MAIN.@RESOURCE.t_pm0
+	sta PTR
+	lda >MAIN.@RESOURCE.t_pm0
+	sta PTR+1
+
+; optimize OK (block_attack.pas), line = 1550
+
+	lda PTR
+	sta ZX5.UNZX5_02A4.INPUTPOINTER
+	lda PTR+1
+	sta ZX5.UNZX5_02A4.INPUTPOINTER+1
+	lda #$00
+	sta ZX5.UNZX5_02A4.OUTPUTPOINTER
+	lda #$DB
+	sta ZX5.UNZX5_02A4.OUTPUTPOINTER+1
+	jsr ZX5.UNZX5_02A4
+
+; optimize OK (block_attack.pas), line = 1552
+
+	lda #$D8
+	sta ATARI.PMBASE
+
+; optimize OK (block_attack.pas), line = 1554
+
+	lda #$03
+	sta ATARI.GRACTL
+
+; optimize OK (block_attack.pas), line = 1555
+
+	lda #$01
+	sta ATARI.PRIOR
+
+; optimize OK (block_attack.pas), line = 1557
+
+	lda #$0F
+	sta ATARI.COLPM0
+
+; optimize OK (block_attack.pas), line = 1558
+
+	sta ATARI.COLPM1
+
+; optimize OK (block_attack.pas), line = 1559
+
+	sta ATARI.COLPM2
+
+; optimize OK (block_attack.pas), line = 1560
+
+	sta ATARI.COLPM3
+
+; optimize OK (block_attack.pas), line = 1562
+
+	lda #$A4
+	sta ATARI.HPOSP0
+
+; optimize OK (block_attack.pas), line = 1563
+
+	lda #$AC
+	sta ATARI.HPOSP1
+
+; optimize OK (block_attack.pas), line = 1564
+
+	lda #$B4
+	sta ATARI.HPOSP2
+
+; optimize OK (block_attack.pas), line = 1565
+
+	lda #$BC
+	sta ATARI.HPOSP3
+
+; ------------------------------------------------------------
+
+PTR	= DATAORIGIN+$01C2
+
+@VarData	= PTR
+@VarDataSize	= 2
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	RESETCHARSET					; PROCEDURE
+	sta A
+
+; optimize FAIL ('SYSTEM.PAUSE_016D', block_attack.pas), line = 1573
+
+	jsr SYSTEM.PAUSE_016D
+
+; -------------------  ASM Block 00000143  -------------------
+
+	lda a
+	sta JGPEor
+
+	lda >CHARSET_RAM_ADDRESS
+	sta JGPFirstCharset
+	sta JGPCharset
+ 
+; ------------------------------------------------------------
+
+A	= DATAORIGIN+$01C4
+
+@VarData	= A
+@VarDataSize	= 1
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	DOINITGAME					; PROCEDURE
+
+; optimize FAIL ('DOINITPMG', block_attack.pas), line = 1592
+
+	jsr DOINITPMG
+
+; optimize FAIL ('SYSTEM.RANDOMIZE', block_attack.pas), line = 1594
+
+	jsr SYSTEM.RANDOMIZE
+
+; optimize OK (block_attack.pas), line = 1596
+
+	lda #$00
+	sta ATARI.SAVMSC
+	lda #$C0
+	sta ATARI.SAVMSC+1
+
+; optimize OK (block_attack.pas), line = 1598
+
+	mwy VRAM :bp2
+	ldy #$00
+	tya
+	sta (:bp2),y
+	iny
+	lda #$C0
+	sta (:bp2),y
+
+; optimize OK (block_attack.pas), line = 1600
+
+	lda #$00
+	sta P
+	lda #$C0
+	sta P+1
+
+; optimize OK (block_attack.pas), line = 1601
+
+	lda P
+	sta SYSTEM.FILLCHAR_0141.A
+	lda P+1
+	sta SYSTEM.FILLCHAR_0141.A+1
+	lda #$00
+	sta SYSTEM.FILLCHAR_0141.COUNT
+	lda #$10
+	sta SYSTEM.FILLCHAR_0141.COUNT+1
+	lda #$00
+	sta SYSTEM.FILLCHAR_0141.VALUE
+	.LOCAL +MAIN.SYSTEM.FILLCHAR_0141
+	m@INLINE
+	.ENDL
+
+; optimize OK (block_attack.pas), line = 1603
+
+	lda P
+	add #$1C
+	sta P
+	scc
+	inc P+1
+
+; optimize OK (block_attack.pas), line = 1605
+
+	lda #$00
+	sta I
+
+l_1836
+; --- ForToDoCondition
+	lda I
+	cmp #$1F
+	jcs l_1844
+
+; optimize OK (block_attack.pas), line = 1606
+
+	lda VPANEL
+	sta SYSTEM.MOVE_0144.SOURCE
+	lda VPANEL+1
+	sta SYSTEM.MOVE_0144.SOURCE+1
+	lda P
+	sta SYSTEM.MOVE_0144.DEST
+	lda P+1
+	sta SYSTEM.MOVE_0144.DEST+1
+	lda #$0F
+	sta SYSTEM.MOVE_0144.COUNT
+	lda #$00
+	sta SYSTEM.MOVE_0144.COUNT+1
+	.LOCAL +MAIN.SYSTEM.MOVE_0144
+	m@INLINE
+	.ENDL
+
+; optimize OK (block_attack.pas), line = 1608
+
+	lda P
+	add #$28
+	sta P
+	scc
+	inc P+1
+
+; --- ForToDoEpilog
+	inc I
+	jne l_1836
+l_1844
+
+; optimize OK (block_attack.pas), line = 1611
+
+	lda #$00
+	sta P
+	lda #$B0
+	sta P+1
+
+; optimize OK (block_attack.pas), line = 1612
+
+	lda P
+	sta SYSTEM.FILLCHAR_0141.A
+	lda P+1
+	sta SYSTEM.FILLCHAR_0141.A+1
+	lda #$00
+	sta SYSTEM.FILLCHAR_0141.COUNT
+	lda #$10
+	sta SYSTEM.FILLCHAR_0141.COUNT+1
+	lda #$00
+	sta SYSTEM.FILLCHAR_0141.VALUE
+	.LOCAL +MAIN.SYSTEM.FILLCHAR_0141
+	m@INLINE
+	.ENDL
+
+; optimize OK (block_attack.pas), line = 1614
+
+	lda P
+	add #$1C
+	sta P
+	scc
+	inc P+1
+
+; optimize OK (block_attack.pas), line = 1616
+
+	lda #$00
+	sta I
+
+l_1863
+; --- ForToDoCondition
+	lda I
+	cmp #$1F
+	jcs l_1871
+
+; optimize OK (block_attack.pas), line = 1617
+
+	lda VPANEL
+	sta SYSTEM.MOVE_0144.SOURCE
+	lda VPANEL+1
+	sta SYSTEM.MOVE_0144.SOURCE+1
+	lda P
+	sta SYSTEM.MOVE_0144.DEST
+	lda P+1
+	sta SYSTEM.MOVE_0144.DEST+1
+	lda #$0F
+	sta SYSTEM.MOVE_0144.COUNT
+	lda #$00
+	sta SYSTEM.MOVE_0144.COUNT+1
+	.LOCAL +MAIN.SYSTEM.MOVE_0144
+	m@INLINE
+	.ENDL
+
+; optimize OK (block_attack.pas), line = 1619
+
+	lda P
+	add #$28
+	sta P
+	scc
+	inc P+1
+
+; --- ForToDoEpilog
+	inc I
+	jne l_1863
+l_1871
+
+; GetResourceHandle
+	lda <MAIN.@RESOURCE.f_id0
+	sta PTR
+	lda >MAIN.@RESOURCE.f_id0
+	sta PTR+1
+
+; optimize OK (block_attack.pas), line = 1624
+
+	lda PTR
+	sta ZX5.UNZX5_02A4.INPUTPOINTER
+	lda PTR+1
+	sta ZX5.UNZX5_02A4.INPUTPOINTER+1
+	lda #$00
+	sta ZX5.UNZX5_02A4.OUTPUTPOINTER
+	lda #$E0
+	sta ZX5.UNZX5_02A4.OUTPUTPOINTER+1
+	jsr ZX5.UNZX5_02A4
+
+; optimize OK (block_attack.pas), line = 1627
+
+	lda PLAYFIELD
+	sta :bp2
+	lda PLAYFIELD+1
+	sta :bp2+1
+	lda #$00
+	ldy #$7F
+	sta:rpl (:bp2),y-
+
+; optimize OK (block_attack.pas), line = 1629
+
+	lda #$24
+	sta ATARI.COLOR0
+
+; optimize OK (block_attack.pas), line = 1630
+
+	lda #$18
+	sta ATARI.COLOR1
+
+; optimize OK (block_attack.pas), line = 1631
+
+	lda #$7C
+	sta ATARI.COLOR2
+
+; optimize OK (block_attack.pas), line = 1632
+
+	lda #$46
+	sta ATARI.COLOR3
+
+; optimize OK (block_attack.pas), line = 1634
+
+	lda #$02
+	sta ATARI.COLOR4
+
+; optimize OK (block_attack.pas), line = 1636
+
+	sta XSEL
+
+; optimize OK (block_attack.pas), line = 1637
+
+	lda #$06
+	sta YSEL
+
+; optimize FAIL ('SELECTBOX', block_attack.pas), line = 1639
+
+	jsr SELECTBOX
+
+; optimize OK (block_attack.pas), line = 1641
+
+	lda #$08
+	sta SCROLL
+
+; optimize OK (block_attack.pas), line = 1643
+
+	lda #$00
+	sta ATARI.SIZEM
+
+; optimize OK (block_attack.pas), line = 1645
+
+	sta VSC
+
+; optimize OK (block_attack.pas), line = 1646
+
+	sta CNTROW
+
+; optimize OK (block_attack.pas), line = 1647
+
+	sta TICK
+
+; optimize OK (block_attack.pas), line = 1649
+
+	sta FOUND
+
+; optimize OK (block_attack.pas), line = 1650
+
+	sta SCORE
+	sta SCORE+1
+	sta SCORE+2
+	sta SCORE+3
+
+; optimize OK (block_attack.pas), line = 1651
+
+	sta SCORE_
+	sta SCORE_+1
+	sta SCORE_+2
+	sta SCORE_+3
+
+; optimize OK (block_attack.pas), line = 1653
+
+	sta HISCORE_
+	sta HISCORE_+1
+	sta HISCORE_+2
+	sta HISCORE_+3
+
+; optimize OK (block_attack.pas), line = 1654
+
+	sta SPEED_CNT
+
+; optimize OK (block_attack.pas), line = 1655
+
+	sta SPEEDINC
+
+; optimize OK (block_attack.pas), line = 1656
+
+	sta SCROLLFREEZE
+	sta SCROLLFREEZE+1
+
+; optimize OK (block_attack.pas), line = 1658
+
+	sta SECOND
+
+; optimize OK (block_attack.pas), line = 1660
+
+	sta STOP
+
+; optimize OK (block_attack.pas), line = 1662
+
+	lda GAMEMODE
+	cmp #$01
+	jne l_18ED
+
+; optimize OK (block_attack.pas), line = 1663
+
+	lda #$02
+	sta MINUTE
+
+; optimize OK (block_attack.pas), line = 1668
+
+	lda adr.GMSPEED+$01
+	jmp l_1902
+l_18ED
+
+; optimize OK (block_attack.pas), line = 1670
+
+	lda #$00
+	sta MINUTE
+
+; optimize OK (block_attack.pas), line = 1671
+
+	lda adr.GMSPEED
+l_1902
+	sta SPEED
+
+; optimize OK (block_attack.pas), line = 1674
+
+	lda #$FF
+	sta SECOND_
+
+; optimize OK (block_attack.pas), line = 1676
+
+	lda #$01
+	sta LEVEL
+
+; optimize FAIL ('TIMEUPDATE', block_attack.pas), line = 1678
+
+	jsr TIMEUPDATE
+
+; optimize FAIL ('PANELUPDATE', block_attack.pas), line = 1679
+
+	jsr PANELUPDATE
+
+; optimize FAIL ('PRINTSPEED', block_attack.pas), line = 1681
+
+	jsr PRINTSPEED
+
+; optimize FAIL ('PRINTSCORE', block_attack.pas), line = 1682
+
+	jsr PRINTSCORE
+
+; optimize FAIL ('PRINTHISCORE', block_attack.pas), line = 1683
+
+	jsr PRINTHISCORE
+
+; optimize OK (block_attack.pas), line = 1685
+
+	lda #$3E
+	sta ATARI.SDMCTL
+
+; optimize OK (block_attack.pas), line = 1687
+
+	lda #$04
+	jsr RESETCHARSET
+
+; optimize OK (block_attack.pas), line = 1689
+
+	lda #$00
+	sta SYSTEM.FILLCHAR_0141.A
+	lda #$A7
+	sta SYSTEM.FILLCHAR_0141.A+1
+	lda #$00
+	sta SYSTEM.FILLCHAR_0141.COUNT
+	lda #$09
+	sta SYSTEM.FILLCHAR_0141.COUNT+1
+	lda #$00
+	sta SYSTEM.FILLCHAR_0141.VALUE
+	.LOCAL +MAIN.SYSTEM.FILLCHAR_0141
+	m@INLINE
+	.ENDL
+
+; GetResourceHandle
+	lda <MAIN.@RESOURCE.sapr_yoshi
+	sta MSX.MODUL
+	lda >MAIN.@RESOURCE.sapr_yoshi
+	sta MSX.MODUL+1
+
+; optimize OK (block_attack.pas), line = 1692
+
+	lda #$00
+	sta MSX.PLAYER
+	lda #$A4
+	sta MSX.PLAYER+1
+
+; optimize OK (block_attack.pas), line = 1694
+
+	lda #$10
+	sta SAPLZSS.TLZSSPLAY.INIT.A
+	lda MSX
+	ldy MSX+1
+	jsr SAPLZSS.TLZSSPLAY.INIT
+
+; optimize FAIL ('SAPLZSS.TLZSSPLAY.DECODE', block_attack.pas), line = 1695
+
+	lda MSX
+	ldy MSX+1
+	jsr SAPLZSS.TLZSSPLAY.DECODE
+
+; optimize FAIL ('SAPLZSS.TLZSSPLAY.PLAY', block_attack.pas), line = 1696
+
+	lda MSX
+	ldy MSX+1
+	jsr SAPLZSS.TLZSSPLAY.PLAY
+
+; optimize OK (block_attack.pas), line = 1698
+
+	lda #$01
+	sta MSX_PLAY
+
+; optimize OK (block_attack.pas), line = 1699
+
+	lda #$00
+	sta MSX_FASTER
+
+; ------------------------------------------------------------
+
+I	= DATAORIGIN+$01C5
+P	= DATAORIGIN+$01C6
+PTR	= DATAORIGIN+$01C8
+
+@VarData	= I
+@VarDataSize	= 5
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	ONSHIFTDOWN					; FUNCTION | ASSEMBLER
+
+; -------------------  ASM Block 00000144  -------------------
+
+	ldy #0
+
+	lda skctl
+	and #%1000
+	sne
+	iny
+
+	sty Result
+
+@exit
+
+; ------------------------------------------------------------
+
+RESULT	= DATAORIGIN+$01CA
+	rts						; ret
+.endl
+
+.local	JOYSCAN						; PROCEDURE
+
+	jmp l_1939
+
+.local	GET_KEY						; PROCEDURE | ASSEMBLER
+
+; -------------------  ASM Block 00000145  -------------------
+
+	lda $d20f
+	and #4
+	bne @exit
+
+	lda $d209
+
+	cmp onKey_: #0
+	bne skp
+
+	ldy delay: #6
+	dey
+	sty delay
+	bne @exit
+skp
+	sta onKey
+	sta onKey_
+
+	mva #6 delay
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+l_1939
+
+; optimize OK (block_attack.pas), line = 1745
+
+?volatile:
+	ldy #1
+	lda JOYSTICK.TRIG0
+	beq @+
+	dey
+@
+	tya
+	sta FIREBTN
+
+; optimize FAIL ('GET_KEY', block_attack.pas), line = 1747
+
+	jsr GET_KEY
+
+; optimize OK (block_attack.pas), line = 1749
+
+	lda ATARI.PORTA
+	and #$0F
+	sta A
+
+; optimize FAIL ('ONSHIFTDOWN', block_attack.pas), line = 1751
+
+	jsr ONSHIFTDOWN
+	lda ONSHIFTDOWN.RESULT
+	sta SHIFTKEY
+
+; optimize FAIL ('JOYSTICK.FIRE2', block_attack.pas), line = 1753
+
+	jsr JOYSTICK.FIRE2
+	lda JOYSTICK.FIRE2.RESULT
+	cmp #$1F
+	jcc l_1962
+	lda #$01
+	sta SHIFTKEY
+l_1962
+
+; optimize OK (block_attack.pas), line = 1756
+
+	lda A
+	cmp JOY
+	jne l_197D
+
+; optimize OK (block_attack.pas), line = 1758
+
+	lda JOYDELAY
+	cmp #$01
+	jcc l_1990
+	dec JOYDELAY
+	jmp @exit
+l_1990
+
+; optimize OK (block_attack.pas), line = 1760
+
+	lda #$FF
+	jmp l_19A4
+l_197D
+
+; optimize OK (block_attack.pas), line = 1763
+
+	lda #$06
+	sta JOYDELAY
+
+; optimize OK (block_attack.pas), line = 1764
+
+	lda A
+l_19A4
+	sta JOY
+
+; optimize OK (block_attack.pas), line = 1768
+
+	lda ONKEY
+	jeq l_19C0
+
+; optimize OK (block_attack.pas), line = 1770
+
+	lda #$00
+	sta FIREBTN
+
+; optimize OK (block_attack.pas), line = 1772
+
+	lda ONKEY
+	sta @CASETMP_0009
+	cmp #$1C
+	jne l_19D0
+@
+
+; optimize OK (block_attack.pas), line = 1773
+
+	lda #$01
+	sta STOP
+	inc MINUTE
+
+	jmp a_0009
+l_19D0
+	cmp #$2F
+	jne l_19E1
+@
+
+; optimize OK (block_attack.pas), line = 1775
+
+	lda #$01
+	sta FIREBTN
+
+	jmp a_0009
+l_19E1
+	cmp #$3A
+	jne l_19EE
+@
+
+; optimize OK (block_attack.pas), line = 1777
+
+	lda #$07
+	sta A
+
+	jmp a_0009
+l_19EE
+	cmp #$3F
+	jne l_19FB
+@
+
+; optimize OK (block_attack.pas), line = 1778
+
+	lda #$0B
+	sta A
+
+	jmp a_0009
+l_19FB
+	cmp #$2E
+	jne l_1A08
+@
+
+; optimize OK (block_attack.pas), line = 1779
+
+	lda #$0E
+	sta A
+
+	jmp a_0009
+l_1A08
+	cmp #$3E
+	jne l_1A15
+@
+
+; optimize OK (block_attack.pas), line = 1780
+
+	lda #$0D
+	sta A
+
+l_1A15
+a_0009
+
+; optimize OK (block_attack.pas), line = 1783
+
+	lda #$00
+	sta ONKEY
+l_19C0
+
+; optimize FAIL (':TMP', block_attack.pas), line = 1787
+
+	lda PRC
+	sta :TMP+1
+	lda PRC+1
+	sta :TMP+2
+	lda #$4C
+	sta :TMP
+	inx
+	mva A :STACKORIGIN,x
+	jsr :TMP
+
+; ------------------------------------------------------------
+
+PRC	= DATAORIGIN+$01CB
+A	= DATAORIGIN+$01CD
+ONKEY	= DATAORIGIN+$01CE
+@CASETMP_0009	= DATAORIGIN+$01CF
+
+@VarData	= PRC
+@VarDataSize	= 5
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	JOYGAME						; PROCEDURE
+
+; ------------------------------------------------------------
+
+; Generate Assignment for BYTE / CHAR / SHORTINT / BOOLEAN
+; as Pointer
+	lda :STACKORIGIN,x
+	sta A
+	dex
+@main
+
+; optimize OK (block_attack.pas), line = 1795
+
+	lda SCROLL
+	jeq l_1A46
+	jmp @exit
+l_1A46
+
+; optimize OK (block_attack.pas), line = 1797
+
+	lda A
+	sta @CASETMP_000A
+	cmp #$0B
+	jne l_1A54
+@
+
+; optimize OK (block_attack.pas), line = 1798
+
+	lda XSEL
+	cmp #$01
+	jcc l_1A66
+	dec XSEL
+l_1A66
+
+	jmp a_000A
+l_1A54
+	cmp #$07
+	jne l_1A76
+@
+
+; optimize OK (block_attack.pas), line = 1799
+
+	lda XSEL
+	cmp #$04
+	jcs l_1A88
+	inc XSEL
+l_1A88
+
+	jmp a_000A
+l_1A76
+	cmp #$0D
+	jne l_1A98
+@
+
+; optimize OK (block_attack.pas), line = 1800
+
+	lda #$0D
+	sub CNTROW
+	sta :STACKORIGIN+10
+	lda YSEL
+	cmp :STACKORIGIN+10
+	jcs l_1AB0
+	inc YSEL
+l_1AB0
+
+	jmp a_000A
+l_1A98
+	cmp #$0E
+	jne l_1AC0
+@
+
+; optimize OK (block_attack.pas), line = 1801
+
+	lda YSEL
+	cmp #$01
+	jcc l_1AD2
+	dec YSEL
+l_1AD2
+
+l_1AC0
+a_000A
+
+; ------------------------------------------------------------
+
+A	= DATAORIGIN+$01D0
+@CASETMP_000A	= DATAORIGIN+$01D1
+
+@VarData	= A
+@VarDataSize	= 2
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	DOGAMEOVER					; FUNCTION
+
+	jmp l_1AE5
+
+.local	SETYES						; PROCEDURE
+
+; optimize OK (doGameOver2.inc), line = 17
+
+	lda #$52
+	sta RIGHT_EDGE
+
+; optimize OK (doGameOver2.inc), line = 18
+
+	lda #$5F
+	sta LEFT_EDGE
+
+; optimize OK (doGameOver2.inc), line = 19
+
+	lda #$58
+	sta ATARI.HPOSM2
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	SETNO						; PROCEDURE
+
+; optimize OK (doGameOver2.inc), line = 26
+
+	lda #$75
+	sta RIGHT_EDGE
+
+; optimize OK (doGameOver2.inc), line = 27
+
+	lda #$7B
+	sta LEFT_EDGE
+
+; optimize OK (doGameOver2.inc), line = 28
+
+	lda #$00
+	sta ATARI.HPOSM2
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	FILL						; PROCEDURE
+	sta A
+
+; optimize OK (doGameOver2.inc), line = 37
+
+	lda #$59
+	sta K
+
+l_1B11
+; --- ForToDoCondition
+	ldy K
+	lda adr.PLAYFIELD,y
+	jeq l_1B34
+
+; optimize OK (doGameOver2.inc), line = 40
+
+	lda A
+	sta adr.PLAYFIELD,y
+
+; optimize OK (doGameOver2.inc), line = 42
+
+	lda #$06
+	sta @BYTE.MOD.B
+	lda K
+	sta @BYTE.MOD.A
+	jsr @BYTE.MOD
+	lda @BYTE.MOD.RESULT
+	jne l_1B54
+	jsr UPDATETILES
+	lda #$02
+	sta SYSTEM.PAUSE_016E.N
+	lda #$00
+	sta SYSTEM.PAUSE_016E.N+1
+	jsr SYSTEM.PAUSE_016E
+l_1B54
+l_1B34
+
+; --- ForToDoEpilog
+	dec K
+	jpl l_1B11
+l_1B1F
+
+; optimize FAIL ('UPDATETILES', doGameOver2.inc), line = 45
+
+	jsr UPDATETILES
+
+; ------------------------------------------------------------
+
+A	= DATAORIGIN+$01D9
+K	= DATAORIGIN+$01DA
+
+@VarData	= A
+@VarDataSize	= 2
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	DOMOVELOGO					; PROCEDURE
+	sta Y
+
+; optimize OK (doGameOver2.inc), line = 59
+
+	lda TIMEOUT
+	jeq l_1B72
+
+; optimize OK (doGameOver2.inc), line = 60
+
+	lda #$90
+	sta PTR
+	lda #$10
+	jmp l_1B80
+l_1B72
+
+; optimize OK (doGameOver2.inc), line = 62
+
+	lda #$30
+	sta PTR
+	lda #$0D
+l_1B80
+	sta PTR+1
+
+; optimize OK (doGameOver2.inc), line = 64
+
+	lda ATARI.SAVMSC
+	add #$04
+	sta P
+	lda ATARI.SAVMSC+1
+	adc #$00
+	sta P+1
+
+; -------------------  ASM Block 00000146  -------------------
+
+	lda y
+	and #3
+	:2 asl @
+	add >CHARSET_RAM_ADDRESS
+
+ 	sta JGPFirstCharset
+	sta JGPCharset
+ 
+; optimize OK (doGameOver2.inc), line = 76
+
+	lda Y
+	and #$03
+	asl @
+	tay
+	lda PTR
+	add adr.GMOV,y
+	sta PTR
+	lda PTR+1
+	adc adr.GMOV+1,y
+	sta PTR+1
+
+; optimize OK (doGameOver2.inc), line = 78
+
+	lda Y
+	lsr @
+	lsr @
+	sta Y
+
+; optimize OK (doGameOver2.inc), line = 80
+
+	jsr @mul40
+	add P
+	sta P
+	lda P+1
+	adc :eax+1
+	sta P+1
+
+; optimize OK (doGameOver2.inc), line = 82
+
+	lda P
+	sta :bp2
+	lda P+1
+	sta :bp2+1
+	lda #$00
+	ldy #$17
+	sta:rpl (:bp2),y-
+
+; optimize OK (doGameOver2.inc), line = 83
+
+	lda P
+	add #$28
+	sta P
+	scc
+	inc P+1
+
+; optimize OK (doGameOver2.inc), line = 84
+
+	sta SYSTEM.FILLCHAR_0141.A
+	lda P+1
+	sta SYSTEM.FILLCHAR_0141.A+1
+	lda #$18
+	sta SYSTEM.FILLCHAR_0141.COUNT
+	lda #$00
+	sta SYSTEM.FILLCHAR_0141.COUNT+1
+	sta SYSTEM.FILLCHAR_0141.VALUE
+	.LOCAL +MAIN.SYSTEM.FILLCHAR_0141
+	m@INLINE
+	.ENDL
+
+; optimize OK (doGameOver2.inc), line = 85
+
+	lda P
+	add #$28
+	sta P
+	scc
+	inc P+1
+
+; optimize OK (doGameOver2.inc), line = 87
+
+	lda #$06
+	sta I
+
+l_1BBC
+; --- ForToDoCondition
+	lda PTR
+	sta SYSTEM.MOVE_0143.SOURCE
+	lda PTR+1
+	sta SYSTEM.MOVE_0143.SOURCE+1
+	lda P
+	sta SYSTEM.MOVE_0143.DEST
+	lda P+1
+	sta SYSTEM.MOVE_0143.DEST+1
+	lda #$18
+	sta SYSTEM.MOVE_0143.COUNT
+	lda #$00
+	sta SYSTEM.MOVE_0143.COUNT+1
+	.LOCAL +MAIN.SYSTEM.MOVE_0143
+	m@INLINE
+	.ENDL
+
+; optimize OK (doGameOver2.inc), line = 89
+
+	lda PTR
+	add #$18
+	sta PTR
+	scc
+	inc PTR+1
+
+; optimize OK (doGameOver2.inc), line = 90
+
+	lda P
+	add #$28
+	sta P
+	scc
+	inc P+1
+
+; --- ForToDoEpilog
+	dec I
+	jpl l_1BBC
+l_1BCA
+
+; ------------------------------------------------------------
+
+Y	= DATAORIGIN+$01DB
+I	= DATAORIGIN+$01DC
+adr.GMOV	= CODEORIGIN+$0CE0
+.var GMOV	= adr.GMOV .word
+
+@VarData	= Y
+@VarDataSize	= 2
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+l_1AE5
+
+; optimize OK (doGameOver2.inc), line = 102
+
+	lda #$00
+	sta SCROLL
+
+; optimize OK (doGameOver2.inc), line = 104
+
+	sta MSX_FASTER
+
+; optimize OK (doGameOver2.inc), line = 105
+
+	sta MSX_PLAY
+
+; optimize FAIL ('SYSTEM.PAUSE_016D', doGameOver2.inc), line = 107
+
+	jsr SYSTEM.PAUSE_016D
+
+; optimize OK (doGameOver2.inc), line = 109
+
+	lda #$10
+	sta SAPLZSS.TLZSSPLAY.STOP.A
+	lda MSX
+	ldy MSX+1
+	jsr SAPLZSS.TLZSSPLAY.STOP
+
+; optimize OK (doGameOver2.inc), line = 117
+
+	lda SECOND
+	add MINUTE
+	sta :STACKORIGIN+9
+	lda #$00
+	adc #$00
+	ldy #1
+	ora :STACKORIGIN+9
+	beq @+
+	dey
+@
+	tya
+	sta TIMEOUT
+
+; optimize OK (doGameOver2.inc), line = 120
+
+	lda #$00
+	sta ATARI.HPOSM1
+
+; optimize OK (doGameOver2.inc), line = 121
+
+	sta ATARI.HPOSM2
+
+; optimize OK (doGameOver2.inc), line = 123
+
+	sta RIGHT_EDGE
+
+; optimize OK (doGameOver2.inc), line = 124
+
+	sta LEFT_EDGE
+
+; optimize OK (doGameOver2.inc), line = 126
+
+	lda #$AD
+	jsr FILL
+
+; optimize OK (doGameOver2.inc), line = 127
+
+	lda #$02
+	sta SYSTEM.PAUSE_016E.N
+	lda #$00
+	sta SYSTEM.PAUSE_016E.N+1
+	jsr SYSTEM.PAUSE_016E
+
+; optimize OK (doGameOver2.inc), line = 129
+
+	lda #$AE
+	jsr FILL
+
+; optimize OK (doGameOver2.inc), line = 131
+
+	lda #$00
+	jsr FILL
+
+; optimize OK (doGameOver2.inc), line = 134
+
+	lda ATARI.SAVMSC
+	sta PTR
+	lda ATARI.SAVMSC+1
+	sta PTR+1
+
+; optimize OK (doGameOver2.inc), line = 136
+
+	lda #$3F
+	sta I
+
+l_1C1F
+; --- ForToDoCondition
+	lda PTR
+	sta :bp2
+	lda PTR+1
+	sta :bp2+1
+	lda #$00
+	ldy #$1B
+	sta:rpl (:bp2),y-
+
+; optimize OK (doGameOver2.inc), line = 139
+
+	ldy #$1E
+	lda #$FA
+	sta (PTR),y
+
+; optimize OK (doGameOver2.inc), line = 140
+
+	iny
+	sta (PTR),y
+
+; optimize OK (doGameOver2.inc), line = 141
+
+	iny
+	sta (PTR),y
+
+; optimize OK (doGameOver2.inc), line = 142
+
+	iny
+	sta (PTR),y
+
+; optimize OK (doGameOver2.inc), line = 143
+
+	iny
+	sta (PTR),y
+
+; optimize OK (doGameOver2.inc), line = 144
+
+	iny
+	sta (PTR),y
+
+; optimize OK (doGameOver2.inc), line = 145
+
+	iny
+	sta (PTR),y
+
+; optimize OK (doGameOver2.inc), line = 147
+
+	lda PTR
+	add #$28
+	sta PTR
+	scc
+	inc PTR+1
+
+; --- ForToDoEpilog
+	dec I
+	jpl l_1C1F
+l_1C2D
+
+; optimize OK (doGameOver2.inc), line = 150
+
+	lda #$00
+	sta SYSTEM.FILLCHAR_0141.A
+	lda #$A7
+	sta SYSTEM.FILLCHAR_0141.A+1
+	lda #$00
+	sta SYSTEM.FILLCHAR_0141.COUNT
+	lda #$09
+	sta SYSTEM.FILLCHAR_0141.COUNT+1
+	lda #$00
+	sta SYSTEM.FILLCHAR_0141.VALUE
+	.LOCAL +MAIN.SYSTEM.FILLCHAR_0141
+	m@INLINE
+	.ENDL
+
+; GetResourceHandle
+	lda <MAIN.@RESOURCE.sapr_critical
+	sta MSX.MODUL
+	lda >MAIN.@RESOURCE.sapr_critical
+	sta MSX.MODUL+1
+
+; optimize OK (doGameOver2.inc), line = 153
+
+	lda #$10
+	sta SAPLZSS.TLZSSPLAY.INIT.A
+	lda MSX
+	ldy MSX+1
+	jsr SAPLZSS.TLZSSPLAY.INIT
+
+; optimize FAIL ('SYSTEM.PAUSE_016D', doGameOver2.inc), line = 155
+
+	jsr SYSTEM.PAUSE_016D
+
+; optimize OK (doGameOver2.inc), line = 157
+
+	lda #$01
+	sta MSX_PLAY
+
+; optimize OK (doGameOver2.inc), line = 159
+
+	mwy VRAM :bp2
+	ldy #$00
+	lda ATARI.SAVMSC
+	add #$80
+	sta (:bp2),y
+	iny
+	lda ATARI.SAVMSC+1
+	adc #$02
+	sta (:bp2),y
+
+; optimize OK (doGameOver2.inc), line = 161
+
+	lda #$00
+	sta VSC
+
+; optimize OK (doGameOver2.inc), line = 162
+
+	lda #$01
+	sta ATARI.VSCROL
+
+; optimize FAIL ('PANELUPDATE', doGameOver2.inc), line = 164
+
+	jsr PANELUPDATE
+
+; optimize OK (doGameOver2.inc), line = 168
+
+	lda #$00
+	jsr RESETCHARSET
+
+; optimize OK (doGameOver2.inc), line = 172
+
+	lda TIMEOUT
+	jeq l_1C8A
+
+; GetResourceHandle
+	lda <MAIN.@RESOURCE.f_id2
+	sta P
+	lda >MAIN.@RESOURCE.f_id2
+	sta P+1
+
+; optimize OK (doGameOver2.inc), line = 175
+
+	lda #$04
+	sta ATARI.COLOR0
+
+; optimize OK (doGameOver2.inc), line = 176
+
+	lda #$0E
+	sta ATARI.COLOR1
+
+; optimize OK (doGameOver2.inc), line = 177
+	jmp l_1CA0
+l_1C8A
+
+; GetResourceHandle
+	lda <MAIN.@RESOURCE.f_id1
+	sta P
+	lda >MAIN.@RESOURCE.f_id1
+	sta P+1
+
+; optimize OK (doGameOver2.inc), line = 182
+
+	lda #$34
+	sta ATARI.COLOR0
+
+; optimize OK (doGameOver2.inc), line = 183
+
+	lda #$28
+	sta ATARI.COLOR1
+
+; optimize OK (doGameOver2.inc), line = 184
+l_1CA0
+
+	lda #$00
+	sta ATARI.COLOR2
+
+; optimize OK (doGameOver2.inc), line = 188
+
+	lda P
+	sta ZX5.UNZX5_02A4.INPUTPOINTER
+	lda P+1
+	sta ZX5.UNZX5_02A4.INPUTPOINTER+1
+	lda #$00
+	sta ZX5.UNZX5_02A4.OUTPUTPOINTER
+	lda #$E0
+	sta ZX5.UNZX5_02A4.OUTPUTPOINTER+1
+	jsr ZX5.UNZX5_02A4
+
+; optimize FAIL ('PANELUPDATE', doGameOver2.inc), line = 191
+
+	jsr PANELUPDATE
+
+; optimize OK (doGameOver2.inc), line = 193
+
+	lda #$08
+	sta ATARI.PRIOR
+
+; optimize OK (doGameOver2.inc), line = 195
+
+	lda #$FF
+	sta ATARI.SIZEM
+
+; optimize OK (doGameOver2.inc), line = 199
+
+	lda #$18
+
+; --- WhileProlog
+	jmp l_1CBF
+l_1CC0
+
+; optimize FAIL ('SYSTEM.PAUSE_016D', doGameOver2.inc), line = 203
+
+	jsr SYSTEM.PAUSE_016D
+
+; optimize OK (doGameOver2.inc), line = 205
+
+	lda I
+	jsr DOMOVELOGO
+
+; optimize OK (doGameOver2.inc), line = 207
+
+	lda I
+	add #$02
+l_1CBF
+	sta I
+
+; optimize OK (doGameOver2.inc), line = 201
+
+	cmp #$50
+	jcc l_1CC0
+
+; optimize OK (doGameOver2.inc), line = 213
+
+	lda TIMEOUT
+	jeq l_1CDE
+
+; GetResourceHandle
+	lda <MAIN.@RESOURCE.f_id2_a
+	sta P
+	lda >MAIN.@RESOURCE.f_id2_a
+	sta P+1
+
+; GetResourceHandle
+	lda <MAIN.@RESOURCE.f_id2_b
+	sta Q
+	lda >MAIN.@RESOURCE.f_id2_b
+	sta Q+1
+
+; optimize OK (doGameOver2.inc), line = 218
+
+	lda P
+	sta ZX5.UNZX5_02A4.INPUTPOINTER
+	lda P+1
+	sta ZX5.UNZX5_02A4.INPUTPOINTER+1
+	lda #$00
+	sta ZX5.UNZX5_02A4.OUTPUTPOINTER
+	lda #$E0
+	sta ZX5.UNZX5_02A4.OUTPUTPOINTER+1
+	jsr ZX5.UNZX5_02A4
+
+; optimize OK (doGameOver2.inc), line = 219
+
+	lda Q
+	sta ZX5.UNZX5_02A4.INPUTPOINTER
+	lda Q+1
+	sta ZX5.UNZX5_02A4.INPUTPOINTER+1
+	lda #$00
+	sta ZX5.UNZX5_02A4.OUTPUTPOINTER
+	lda #$E4
+	sta ZX5.UNZX5_02A4.OUTPUTPOINTER+1
+	jsr ZX5.UNZX5_02A4
+
+; optimize OK (doGameOver2.inc), line = 221
+
+	lda #$04
+	jsr RESETCHARSET
+
+; optimize OK (doGameOver2.inc), line = 223
+
+	lda #$D0
+	sta PTR
+	lda #$0F
+	sta PTR+1
+
+; optimize OK (doGameOver2.inc), line = 225
+
+	lda ATARI.SAVMSC
+	add #$24
+	sta P
+	lda ATARI.SAVMSC+1
+	adc #$03
+	sta P+1
+
+; optimize OK (doGameOver2.inc), line = 227
+
+	lda #$07
+	sta I
+
+l_1D07
+; --- ForToDoCondition
+	lda PTR
+	sta SYSTEM.MOVE_0143.SOURCE
+	lda PTR+1
+	sta SYSTEM.MOVE_0143.SOURCE+1
+	lda P
+	sta SYSTEM.MOVE_0143.DEST
+	lda P+1
+	sta SYSTEM.MOVE_0143.DEST+1
+	lda #$18
+	sta SYSTEM.MOVE_0143.COUNT
+	lda #$00
+	sta SYSTEM.MOVE_0143.COUNT+1
+	.LOCAL +MAIN.SYSTEM.MOVE_0143
+	m@INLINE
+	.ENDL
+
+; optimize OK (doGameOver2.inc), line = 229
+
+	lda PTR
+	add #$18
+	sta PTR
+	scc
+	inc PTR+1
+
+; optimize OK (doGameOver2.inc), line = 230
+
+	lda P
+	add #$28
+	sta P
+	scc
+	inc P+1
+
+; --- ForToDoEpilog
+	dec I
+	jpl l_1D07
+l_1D15
+
+; optimize OK (doGameOver2.inc), line = 233
+
+	lda #$F0
+	jmp l_1D2F
+l_1CDE
+
+; GetResourceHandle
+	lda <MAIN.@RESOURCE.f_id1_a
+	sta P
+	lda >MAIN.@RESOURCE.f_id1_a
+	sta P+1
+
+; GetResourceHandle
+	lda <MAIN.@RESOURCE.f_id1_b
+	sta Q
+	lda >MAIN.@RESOURCE.f_id1_b
+	sta Q+1
+
+; optimize OK (doGameOver2.inc), line = 240
+
+	lda P
+	sta ZX5.UNZX5_02A4.INPUTPOINTER
+	lda P+1
+	sta ZX5.UNZX5_02A4.INPUTPOINTER+1
+	lda #$00
+	sta ZX5.UNZX5_02A4.OUTPUTPOINTER
+	lda #$E0
+	sta ZX5.UNZX5_02A4.OUTPUTPOINTER+1
+	jsr ZX5.UNZX5_02A4
+
+; optimize OK (doGameOver2.inc), line = 241
+
+	lda Q
+	sta ZX5.UNZX5_02A4.INPUTPOINTER
+	lda Q+1
+	sta ZX5.UNZX5_02A4.INPUTPOINTER+1
+	lda #$00
+	sta ZX5.UNZX5_02A4.OUTPUTPOINTER
+	lda #$E4
+	sta ZX5.UNZX5_02A4.OUTPUTPOINTER+1
+	jsr ZX5.UNZX5_02A4
+
+; optimize OK (doGameOver2.inc), line = 243
+
+	lda #$04
+	jsr RESETCHARSET
+
+; optimize OK (doGameOver2.inc), line = 245
+
+	lda #$70
+	sta PTR
+	lda #$0C
+	sta PTR+1
+
+; optimize OK (doGameOver2.inc), line = 247
+
+	lda ATARI.SAVMSC
+	add #$24
+	sta P
+	lda ATARI.SAVMSC+1
+	adc #$03
+	sta P+1
+
+; optimize OK (doGameOver2.inc), line = 249
+
+	lda #$07
+	sta I
+
+l_1D57
+; --- ForToDoCondition
+	lda PTR
+	sta SYSTEM.MOVE_0143.SOURCE
+	lda PTR+1
+	sta SYSTEM.MOVE_0143.SOURCE+1
+	lda P
+	sta SYSTEM.MOVE_0143.DEST
+	lda P+1
+	sta SYSTEM.MOVE_0143.DEST+1
+	lda #$18
+	sta SYSTEM.MOVE_0143.COUNT
+	lda #$00
+	sta SYSTEM.MOVE_0143.COUNT+1
+	.LOCAL +MAIN.SYSTEM.MOVE_0143
+	m@INLINE
+	.ENDL
+
+; optimize OK (doGameOver2.inc), line = 251
+
+	lda PTR
+	add #$18
+	sta PTR
+	scc
+	inc PTR+1
+
+; optimize OK (doGameOver2.inc), line = 252
+
+	lda P
+	add #$28
+	sta P
+	scc
+	inc P+1
+
+; --- ForToDoEpilog
+	dec I
+	jpl l_1D57
+l_1D65
+
+; optimize OK (doGameOver2.inc), line = 255
+
+	lda #$30
+l_1D2F
+	sta PTR
+	lda #$13
+	sta PTR+1
+
+; optimize OK (doGameOver2.inc), line = 259
+
+	lda ATARI.SAVMSC
+	add #$B4
+	sta P
+	lda ATARI.SAVMSC+1
+	adc #$04
+	sta P+1
+
+; optimize OK (doGameOver2.inc), line = 261
+
+	lda #$07
+	sta I
+
+l_1D90
+; --- ForToDoCondition
+	lda PTR
+	sta SYSTEM.MOVE_0143.SOURCE
+	lda PTR+1
+	sta SYSTEM.MOVE_0143.SOURCE+1
+	lda P
+	sta SYSTEM.MOVE_0143.DEST
+	lda P+1
+	sta SYSTEM.MOVE_0143.DEST+1
+	lda #$18
+	sta SYSTEM.MOVE_0143.COUNT
+	lda #$00
+	sta SYSTEM.MOVE_0143.COUNT+1
+	.LOCAL +MAIN.SYSTEM.MOVE_0143
+	m@INLINE
+	.ENDL
+
+; optimize OK (doGameOver2.inc), line = 263
+
+	lda PTR
+	add #$18
+	sta PTR
+	scc
+	inc PTR+1
+
+; optimize OK (doGameOver2.inc), line = 264
+
+	lda P
+	add #$28
+	sta P
+	scc
+	inc P+1
+
+; --- ForToDoEpilog
+	dec I
+	jpl l_1D90
+l_1D9E
+
+; optimize OK (doGameOver2.inc), line = 268
+
+	lda #$00
+	ldy #256-256
+	sta:rne $DB00+256-256,y+
+
+; optimize OK (doGameOver2.inc), line = 270
+
+	lda #$FF
+	ldy #$0D
+	sta:rpl $DBA9,y-
+
+; optimize OK (doGameOver2.inc), line = 272
+
+	lda #$01
+	sta RESULT
+
+; optimize FAIL ('SETYES', doGameOver2.inc), line = 275
+
+	jsr SETYES
+
+; optimize OK (doGameOver2.inc), line = 278
+
+	lda #$01
+	sta XSEL
+
+; --- WhileProlog
+	jmp l_1DBE
+l_1DBF
+
+; optimize OK (doGameOver2.inc), line = 282
+
+	lda TIMEOUT
+	jne l_1DCE
+
+; optimize OK (doGameOver2.inc), line = 283
+
+	lda ATARI.COLOR0
+	add #$11
+	sta ATARI.COLOR0
+
+; optimize OK (doGameOver2.inc), line = 284
+
+	lda ATARI.COLOR1
+	sub #$11
+	sta ATARI.COLOR1
+l_1DCE
+
+; optimize FAIL ('SYSTEM.PAUSE_016D', doGameOver2.inc), line = 287
+
+	jsr SYSTEM.PAUSE_016D
+
+; optimize OK (doGameOver2.inc), line = 289
+
+	lda <JOYGAME
+	sta JOYSCAN.PRC
+	lda >JOYGAME
+	sta JOYSCAN.PRC+1
+	jsr JOYSCAN
+
+; optimize OK (doGameOver2.inc), line = 291
+
+	lda FIREBTN
+	jeq l_1DE1
+	jmp b_1DBF					; break
+l_1DE1
+
+; optimize OK (doGameOver2.inc), line = 293
+
+	lda XSEL
+	sta @CASETMP_000B
+	jne l_1DEF
+@
+
+; optimize OK (doGameOver2.inc), line = 294
+
+	lda RESULT
+	jne l_1DFE
+	jsr SETYES
+	lda #$01
+	sta XSEL
+	sta RESULT
+l_1DFE
+
+	jmp a_000B
+l_1DEF
+	cmp #$02
+	jne l_1E13
+@
+
+; optimize OK (doGameOver2.inc), line = 295
+
+	lda RESULT
+	jeq l_1E1F
+	jsr SETNO
+	lda #$01
+	sta XSEL
+	lda #$00
+	sta RESULT
+l_1E1F
+
+	jmp a_000B
+l_1E13
+
+; optimize OK (doGameOver2.inc), line = 297
+
+	lda #$01
+	sta XSEL
+a_000B
+
+; --- WhileProlog
+l_1E38
+
+; optimize OK (doGameOver2.inc), line = 300
+
+?volatile:
+	lda ATARI.VCOUNT
+	cmp #$46
+	jne l_1E38
+
+; --- WhileProlog
+	jmp l_1E46
+l_1E47
+
+; optimize OK (doGameOver2.inc), line = 302
+
+	lda RND
+	and #$F0
+	ora #$04
+	sta ATARI.COLPF0
+l_1E46
+?volatile:
+	lda ATARI.VCOUNT
+	cmp #$4E
+	jne l_1E47
+
+; optimize OK (doGameOver2.inc), line = 304
+
+	lda #$02
+	sta ATARI.COLPF0
+l_1DBE
+
+; optimize OK (doGameOver2.inc), line = 280
+
+	jmp l_1DBF
+b_1DBF
+
+; optimize OK (doGameOver2.inc), line = 309
+
+	lda #$00
+	sta RIGHT_EDGE
+
+; optimize OK (doGameOver2.inc), line = 310
+
+	sta LEFT_EDGE
+
+; optimize OK (doGameOver2.inc), line = 311
+
+	sta ATARI.HPOSM2
+
+; optimize OK (doGameOver2.inc), line = 313
+
+	sta ATARI.SDMCTL
+
+; optimize FAIL ('CLEARGTIA', doGameOver2.inc), line = 315
+
+	jsr CLEARGTIA
+
+; optimize OK (doGameOver2.inc), line = 318
+
+	lda #$00
+	sta MSX_PLAY
+
+; optimize FAIL ('SYSTEM.PAUSE_016D', doGameOver2.inc), line = 320
+
+	jsr SYSTEM.PAUSE_016D
+
+; optimize OK (doGameOver2.inc), line = 322
+
+	lda #$10
+	sta SAPLZSS.TLZSSPLAY.STOP.A
+	lda MSX
+	ldy MSX+1
+	jsr SAPLZSS.TLZSSPLAY.STOP
+@exit
+
+; ------------------------------------------------------------
+
+RESULT	= DATAORIGIN+$01D2
+P	= DATAORIGIN+$01D3
+Q	= DATAORIGIN+$01D5
+PTR	= $E0
+I	= DATAORIGIN+$01D7
+TIMEOUT	= DATAORIGIN+$01D8
+YPOS	= $23
+@CASETMP_000B	= DATAORIGIN+$01DD
+
+@VarData	= P
+@VarDataSize	= 7
+
+	rts						; ret
+.endl
+
+.local	SETGAMESPEED					; PROCEDURE
+
+	jmp l_1E85
+
+.local	D1						; PROCEDURE
+
+; optimize OK (block_title2.inc), line = 12
+
+	lda adr.T+$01
+	sub #$30
+	asl @
+	asl @
+	asl @
+	asl @
+	sta A
+
+; optimize OK (block_title2.inc), line = 13
+
+	lda <adr.PMDIGIT
+	add A
+	sta :bp2
+	lda >adr.PMDIGIT
+	adc #$00
+	sta :bp2+1
+	ldy #$0F
+	mva:rpl (:bp2),y $DE88,y-
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+l_1E85
+
+; optimize OK (block_title2.inc), line = 18
+
+	ldy GAMEMODE
+	lda adr.GMSPEED,y
+	sta A
+
+; optimize OK (block_title2.inc), line = 20
+
+	lda #$64
+	sub A
+	jsr SYSUTILS.BYTETOSTR
+	inx
+	lda SYSUTILS.BYTETOSTR.RESULT
+	sta @move.src
+	lda SYSUTILS.BYTETOSTR.RESULT+1
+	sta @move.src+1
+	@moveSTRING T #4
+	dex
+
+; optimize OK (block_title2.inc), line = 22
+
+	lda adr.T
+	cmp #$02
+	jne l_1EBE
+
+; optimize OK (block_title2.inc), line = 24
+
+	lda adr.T+$02
+	sub #$30
+	asl @
+	asl @
+	asl @
+	asl @
+	sta A
+
+; optimize OK (block_title2.inc), line = 25
+
+	lda <adr.PMDIGIT
+	add A
+	sta :bp2
+	lda >adr.PMDIGIT
+	adc #$00
+	sta :bp2+1
+	ldy #$0F
+	mva:rpl (:bp2),y $DF88,y-
+
+; optimize FAIL ('D1', block_title2.inc), line = 27
+
+	jsr D1
+
+; optimize OK (block_title2.inc), line = 29
+
+	lda #$9F
+	sta $D807
+
+; optimize OK (block_title2.inc), line = 30
+
+	lda #$99
+	jmp l_1EE4
+l_1EBE
+
+; optimize FAIL ('D1', block_title2.inc), line = 34
+
+	jsr D1
+
+; optimize OK (block_title2.inc), line = 36
+
+	lda #$00
+	sta $D807
+
+; optimize OK (block_title2.inc), line = 37
+
+	lda #$9C
+l_1EE4
+	sta $D806
+
+; ------------------------------------------------------------
+
+A	= DATAORIGIN+$01DE
+adr.T	= [DATAORIGIN+$01DF] .array [4]
+.var T	= adr.T .word
+
+@VarData	= A
+@VarDataSize	= 5
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	SETGAMEMODE					; PROCEDURE
+	sta A
+
+; optimize OK (block_title2.inc), line = 47
+
+	sta GAMEMODE
+
+; optimize OK (block_title2.inc), line = 49
+
+	lda A
+	sta @CASETMP_000C
+	jne l_1F00
+@
+
+; optimize OK (block_title2.inc), line = 52
+
+	lda #$11
+	sta $F1E6
+
+; optimize OK (block_title2.inc), line = 53
+
+	lda #$2B
+	sta $F20E
+
+; optimize OK (block_title2.inc), line = 55
+
+	lda #$42
+	sta $D906
+
+; optimize OK (block_title2.inc), line = 56
+
+	lda #$50
+	sta $D92E
+
+	jmp a_000C
+l_1F00
+	cmp #$01
+	jne l_1F15
+@
+
+; optimize OK (block_title2.inc), line = 62
+
+	lda #$42
+	sta $F1E6
+
+; optimize OK (block_title2.inc), line = 63
+
+	lda #$50
+	sta $F20E
+
+; optimize OK (block_title2.inc), line = 65
+
+	lda #$11
+	sta $D906
+
+; optimize OK (block_title2.inc), line = 66
+
+	lda #$2B
+	sta $D92E
+
+l_1F15
+a_000C
+
+; optimize FAIL ('SETGAMESPEED', block_title2.inc), line = 72
+
+	jsr SETGAMESPEED
+
+; ------------------------------------------------------------
+
+A	= DATAORIGIN+$01E3
+@CASETMP_000C	= DATAORIGIN+$01E4
+
+@VarData	= A
+@VarDataSize	= 2
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+
+.local	DOTITLE						; PROCEDURE
+
+	jmp l_1F2C
+
+.local	JOYMENU						; PROCEDURE
+
+; ------------------------------------------------------------
+
+; Generate Assignment for BYTE / CHAR / SHORTINT / BOOLEAN
+; as Pointer
+	lda :STACKORIGIN,x
+	sta A
+	dex
+@main
+
+; optimize OK (block_title2.inc), line = 85
+
+	lda A
+	sta @CASETMP_000D
+	cmp #$07
+	jne l_1F3D
+@
+
+; optimize OK (block_title2.inc), line = 86
+
+	lda S
+	cmp #$02
+	jcc l_1F4F
+	dec S
+	ldy Y
+	lda S
+	sta adr.GMSPEED,y
+	jsr SETGAMESPEED
+l_1F4F
+	jmp a_000D
+l_1F3D
+	cmp #$0B
+	jne l_1F69
+
+; optimize OK (block_title2.inc), line = 87
+
+	lda S
+	cmp #$63
+	jcs l_1F7B
+	inc S
+	ldy Y
+	lda S
+	sta adr.GMSPEED,y
+	jsr SETGAMESPEED
+l_1F7B
+	jmp a_000D
+l_1F69
+	cmp #$0D
+	jne l_1F95
+
+; optimize OK (block_title2.inc), line = 88
+
+	lda Y
+	jne l_1FA7
+	inc Y
+	ldy Y
+	lda adr.GMSPEED,y
+	sta S
+	jsr SETGAMESPEED
+l_1FA7
+	jmp a_000D
+l_1F95
+	cmp #$0E
+	jne l_1FC1
+
+; optimize OK (block_title2.inc), line = 89
+
+	lda Y
+	cmp #$01
+	jne l_1FD3
+	dec Y
+	ldy Y
+	lda adr.GMSPEED,y
+	sta S
+	jsr SETGAMESPEED
+l_1FD3
+l_1FC1
+a_000D
+
+; ------------------------------------------------------------
+
+A	= DATAORIGIN+$01E9
+@CASETMP_000D	= DATAORIGIN+$01EA
+
+@VarData	= A
+@VarDataSize	= 2
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+l_1F2C
+
+; optimize OK (block_title2.inc), line = 99
+
+	lda #$00
+	sta ATARI.SDMCTL
+
+; optimize FAIL ('SYSTEM.PAUSE_016D', block_title2.inc), line = 100
+
+	jsr SYSTEM.PAUSE_016D
+
+; GetResourceHandle
+	lda <MAIN.@RESOURCE.t_tit
+	sta PTR
+	lda >MAIN.@RESOURCE.t_tit
+	sta PTR+1
+
+; optimize OK (block_title2.inc), line = 103
+
+	lda PTR
+	sta ZX5.UNZX5_02A4.INPUTPOINTER
+	lda PTR+1
+	sta ZX5.UNZX5_02A4.INPUTPOINTER+1
+	lda #$00
+	sta ZX5.UNZX5_02A4.OUTPUTPOINTER
+	lda #$D8
+	sta ZX5.UNZX5_02A4.OUTPUTPOINTER+1
+	jsr ZX5.UNZX5_02A4
+
+; optimize OK (block_title2.inc), line = 105
+
+	lda #$00
+	sta SYSTEM.FILLCHAR_0141.A
+	lda #$A7
+	sta SYSTEM.FILLCHAR_0141.A+1
+	lda #$00
+	sta SYSTEM.FILLCHAR_0141.COUNT
+	lda #$09
+	sta SYSTEM.FILLCHAR_0141.COUNT+1
+	lda #$00
+	sta SYSTEM.FILLCHAR_0141.VALUE
+	.LOCAL +MAIN.SYSTEM.FILLCHAR_0141
+	m@INLINE
+	.ENDL
+
+; GetResourceHandle
+	lda <MAIN.@RESOURCE.sapr_modul
+	sta MSX.MODUL
+	lda >MAIN.@RESOURCE.sapr_modul
+	sta MSX.MODUL+1
+
+; optimize OK (block_title2.inc), line = 108
+
+	lda #$00
+	sta MSX.PLAYER
+	lda #$A4
+	sta MSX.PLAYER+1
+
+; optimize OK (block_title2.inc), line = 110
+
+	lda #$00
+	sta SAPLZSS.TLZSSPLAY.INIT.A
+	lda MSX
+	ldy MSX+1
+	jsr SAPLZSS.TLZSSPLAY.INIT
+
+; -------------------  ASM Block 00000147  -------------------
+
+	lda <MAIN.PlaySAP
+	ldy >MAIN.PlaySAP
+
+	jsr pmb_page
+ 
+; optimize OK (block_title2.inc), line = 122
+
+	lda #$00
+	sta ATARI.SDMCTL
+
+; optimize FAIL ('SYSTEM.PAUSE_016D', block_title2.inc), line = 123
+
+	jsr SYSTEM.PAUSE_016D
+
+; optimize OK (block_title2.inc), line = 125
+
+	lda #$00
+	sta SAPLZSS.TLZSSPLAY.STOP.A
+	lda MSX
+	ldy MSX+1
+	jsr SAPLZSS.TLZSSPLAY.STOP
+
+; GetResourceHandle
+	lda <MAIN.@RESOURCE.t_tit2
+	sta PTR
+	lda >MAIN.@RESOURCE.t_tit2
+	sta PTR+1
+
+; optimize OK (block_title2.inc), line = 129
+
+	lda PTR
+	sta ZX5.UNZX5_02A4.INPUTPOINTER
+	lda PTR+1
+	sta ZX5.UNZX5_02A4.INPUTPOINTER+1
+	lda #$00
+	sta ZX5.UNZX5_02A4.OUTPUTPOINTER
+	lda #$D8
+	sta ZX5.UNZX5_02A4.OUTPUTPOINTER+1
+	jsr ZX5.UNZX5_02A4
+
+; -------------------  ASM Block 00000148  -------------------
+
+ 	lda <MAIN.PlaySAP
+	ldy >MAIN.PlaySAP
+
+	jsr pmb_page
+ 
+; --- WhileProlog
+l_200E
+
+; optimize OK (block_title2.inc), line = 141
+
+?volatile:
+	lda JOYSTICK.TRIG0
+	jeq l_200E
+
+; optimize OK (block_title2.inc), line = 143
+
+	lda GAMEMODE
+	sta Y
+
+; optimize OK (block_title2.inc), line = 144
+
+	tay
+	lda adr.GMSPEED,y
+	sta S
+
+; optimize OK (block_title2.inc), line = 146
+
+	lda GAMEMODE
+	jsr SETGAMEMODE
+
+; optimize FAIL ('SETGAMESPEED', block_title2.inc), line = 147
+
+	jsr SETGAMESPEED
+
+; --- WhileProlog
+	jmp l_2030
+l_2031
+
+; optimize FAIL ('SYSTEM.PAUSE_016D', block_title2.inc), line = 151
+
+	jsr SYSTEM.PAUSE_016D
+
+; optimize OK (block_title2.inc), line = 153
+
+	lda <JOYMENU
+	sta JOYSCAN.PRC
+	lda >JOYMENU
+	sta JOYSCAN.PRC+1
+	jsr JOYSCAN
+
+; optimize OK (block_title2.inc), line = 155
+
+	lda GAMEMODE
+	cmp Y
+	jeq l_2047
+	lda Y
+	jsr SETGAMEMODE
+l_2047
+
+; optimize OK (block_title2.inc), line = 157
+
+	lda FIREBTN
+	jeq l_205A
+	jmp b_2031					; break
+l_205A
+l_2030
+
+; optimize OK (block_title2.inc), line = 149
+
+	jmp l_2031
+b_2031
+
+; -------------------  ASM Block 00000149  -------------------
+
+	jsr pmb_page+3
+ 
+; optimize OK (block_title2.inc), line = 166
+
+	lda #$00
+	sta ATARI.SDMCTL
+
+; optimize FAIL ('SYSTEM.PAUSE_016D', block_title2.inc), line = 167
+
+	jsr SYSTEM.PAUSE_016D
+
+; optimize OK (block_title2.inc), line = 169
+
+	lda #$00
+	sta SAPLZSS.TLZSSPLAY.STOP.A
+	lda MSX
+	ldy MSX+1
+	jsr SAPLZSS.TLZSSPLAY.STOP
+
+; ------------------------------------------------------------
+
+PTR	= DATAORIGIN+$01E5
+S	= DATAORIGIN+$01E7
+Y	= DATAORIGIN+$01E8
+
+@VarData	= PTR
+@VarDataSize	= 4
+
+@exit
+	.ifdef @new
+	lda <@VarData
+	sta :ztmp
+	lda >@VarData
+	ldy #@VarDataSize-1
+	jmp @FreeMem
+	els
+	rts						; ret
+	eif
+.endl
+l_00F9
+
+; optimize OK (block_attack.pas), line = 1819
+
+	lda #$02
+	sta ATARI.COLOR4
+
+; optimize FAIL ('SYSTEM.PAUSE_016D', block_attack.pas), line = 1821
+
+	jsr SYSTEM.PAUSE_016D
+
+; -------------------  ASM Block 00000150  -------------------
+
+  sei
+  lda #0
+  sta nmien
+  sta irqen
+  sta irqen+$10
+  sta irqen+$20
+  sta irqen+$30
+
+  mva #$fe portb
+
+  mwa #NMI nmivec
+  mwa #IRQ irqvec
+
+  lda #0
+  sta pm_color
+  sta pm_color+1
+  sta pm_color+2
+  sta pm_color+3
+  sta pm_color+4
+  sta pm_color+5
+  sta pm_color+6
+  sta pm_color+7
+
+  lda #$78
+  sta pm_color+8
+  sta pm_color+9
+  sta pm_color+10
+  sta pm_color+11
+  sta pm_color+12
+
+  lda #$56
+  sta pm_color+13
+  sta pm_color+14
+  sta pm_color+15
+  sta pm_color+16
+
+  lda #$48
+  sta pm_color+17
+  sta pm_color+18
+  sta pm_color+19
+  sta pm_color+20
+
+  lda #$36
+  sta pm_color+21
+  sta pm_color+22
+  sta pm_color+23
+  sta pm_color+24
+
+  lda #$24
+  sta pm_color+25
+  sta pm_color+26
+  sta pm_color+27
+  sta pm_color+28
+
+  lda #$16
+  sta pm_color+29
+  sta pm_color+30
+  sta pm_color+31
+  sta pm_color+32
+
+  lda #$e6
+  sta pm_color+33
+  sta pm_color+34
+  sta pm_color+35
+  sta pm_color+36
+
+;  lda #bkg_color
+  sta pm_color+37
+  sta pm_color+38
+
+  mva #$40 nmien
+
+ 
+; --- RepeatUntilProlog
+l_206F
+
+; optimize FAIL ('DOTITLE', block_attack.pas), line = 1901
+
+	jsr DOTITLE
+
+; optimize OK (block_attack.pas), line = 1903
+
+	lda #$00
+	sta JGP2.JGPINIT.DLISTADDRESS
+	lda #$D8
+	sta JGP2.JGPINIT.DLISTADDRESS+1
+	lda #$00
+	sta JGP2.JGPINIT.VRAMADDRESS
+	lda #$C0
+	sta JGP2.JGPINIT.VRAMADDRESS+1
+	lda #$1C
+	sta JGP2.JGPINIT.LINES
+	lda #$01
+	sta JGP2.JGPINIT.BLANKS
+	jsr JGP2.JGPINIT
+
+; optimize OK (block_attack.pas), line = 1905
+
+	lda #$02
+	sta VRAM
+	lda #$D8
+	sta VRAM+1
+
+; -------------------  ASM Block 00000151  -------------------
+
+	sei
+	lda #0
+	sta nmien
+
+	;sta AUDCTL+$10
+
+	sta SKCTL			; jedna linia nizej dzieki WSYNC i SKCTL=0
+	;sta SKCTL+$10
+
+ 	lda #1				; 0=POKEY 64KHz, 1=15KHz
+	sta AUDCTL
+	lda #7				; ~64KHz clock 16 = ~4Khz timer, ~15KHz clock 4 = ~4KHz
+	sta AUDF4			; in timer 1
+
+	lda #$f0			; test - no polycounters + volume only
+	sta AUDC4
+	lda #4
+	sta IRQEN			; enable timer 1
+
+	sta wsync
+
+	lda #3
+	sta SKCTL			; test - reset pokey and polycounters
+	;sta SKCTL+$10
+
+	sta STIMER			; start timers
+
+	cli
+ 
+; optimize OK (block_attack.pas), line = 1938
+
+	lda #$C0
+	sta ATARI.NMIEN
+
+; optimize FAIL ('DOINITGAME', block_attack.pas), line = 1940
+
+	jsr DOINITGAME
+
+; --- RepeatUntilProlog
+l_207F
+
+; optimize OK (block_attack.pas), line = 1944
+
+	lda SECOND
+	cmp SECOND_
+	jeq l_2093
+
+; optimize FAIL ('PRINTTIME', block_attack.pas), line = 1945
+
+	jsr PRINTTIME
+
+; optimize OK (block_attack.pas), line = 1947
+
+	lda SECOND
+	sta SECOND_
+
+; optimize OK (block_attack.pas), line = 1949
+
+	lda SCORE+3
+	cmp SCORE_+3
+	bne @+
+	lda SCORE+2
+	cmp SCORE_+2
+	bne @+
+	lda SCORE+1
+	cmp SCORE_+1
+	bne @+
+	lda SCORE
+	cmp SCORE_
+@
+	jeq l_20AB
+	jsr PRINTALLSCORES
+l_20AB
+l_2093
+
+; optimize OK (block_attack.pas), line = 1954
+
+	lda MATCH
+	jne l_20D3x
+	lda MONSTER0_FRM
+	and #$03
+	cmp #$01
+	jeq l_20D3
+l_20D3x
+
+; optimize OK (block_attack.pas), line = 1956
+
+	lda #$B0
+	sta MONSTERS.PTR
+	lda #$14
+	sta MONSTERS.PTR+1
+	lda #$18
+	sta MONSTERS.OFS
+	lda <MONSTER0_FRM
+	sta MONSTERS.FRM
+	lda >MONSTER0_FRM
+	sta MONSTERS.FRM+1
+	jsr MONSTERS
+l_20D3
+
+; optimize OK (block_attack.pas), line = 1960
+
+	lda COMBO_CNT
+	jne l_20FCx
+	lda MONSTER1_FRM
+	and #$03
+	cmp #$01
+	jeq l_20FC
+l_20FCx
+	lda #$40
+	sta MONSTERS.PTR
+	lda #$15
+	sta MONSTERS.PTR+1
+	lda #$78
+	sta MONSTERS.OFS
+	lda <MONSTER1_FRM
+	sta MONSTERS.FRM
+	lda >MONSTER1_FRM
+	sta MONSTERS.FRM+1
+	jsr MONSTERS
+l_20FC
+
+; optimize OK (block_attack.pas), line = 1963
+
+	lda MONSTER2_FRM
+	ldy #1
+	and #$03
+	cmp #$01
+	bne @+
+	dey
+@
+	tya
+	ora SWAP_PLAY
+	jeq l_211F
+	lda #$D0
+	sta MONSTERS.PTR
+	lda #$15
+	sta MONSTERS.PTR+1
+	lda #$D8
+	sta MONSTERS.OFS
+	lda <MONSTER2_FRM
+	sta MONSTERS.FRM
+	lda >MONSTER2_FRM
+	sta MONSTERS.FRM+1
+	jsr MONSTERS
+l_211F
+
+; optimize FAIL ('SYSTEM.PAUSE_016D', block_attack.pas), line = 1966
+
+	jsr SYSTEM.PAUSE_016D
+
+; optimize OK (block_attack.pas), line = 1968
+
+	lda <JOYGAME
+	sta JOYSCAN.PRC
+	lda >JOYGAME
+	sta JOYSCAN.PRC+1
+	jsr JOYSCAN
+
+; optimize OK (block_attack.pas), line = 1971
+
+	lda FIREDELAY
+	and FIREBTN
+	jeq l_213A
+
+; optimize FAIL ('SWAPTILESON', block_attack.pas), line = 1972
+
+	jsr SWAPTILESON
+
+; optimize OK (block_attack.pas), line = 1974
+
+	lda #$00
+	sta FIREDELAY
+l_213A
+
+; optimize OK (block_attack.pas), line = 1978
+
+	lda SWAPTILES.STAGE
+	jne l_2154
+
+; optimize OK (block_attack.pas), line = 1979
+
+	lda FOUNDTHREE
+	jne l_2167
+
+; optimize OK (block_attack.pas), line = 1980
+
+	lda SCROLL
+	cmp #$01
+	jcs l_2180x
+	lda:sne SCROLLUP
+	jmp l_2180
+l_2180x
+	jsr ONSCROLL
+l_2180
+l_2167
+l_2154
+
+; optimize FAIL ('SELECTBOX', block_attack.pas), line = 1982
+
+	jsr SELECTBOX
+
+; optimize OK (block_attack.pas), line = 1984
+
+	lda SWAPTILES.STAGE
+	jne l_219B
+
+; optimize OK (block_attack.pas), line = 1985
+
+	lda FOUNDTHREE
+	jeq l_21A8
+
+; optimize FAIL ('DOSCORE', block_attack.pas), line = 1987
+
+	jsr DOSCORE
+	lda DOSCORE.RESULT
+	jeq l_21B3
+
+; --- WhileProlog
+l_21B7
+
+; optimize FAIL ('TILESFALLDOWN', block_attack.pas), line = 1988
+
+	jsr TILESFALLDOWN
+	lda TILESFALLDOWN.RESULT
+	jne l_21B7
+l_21B3
+
+; optimize FAIL ('UPDATETILES', block_attack.pas), line = 1990
+
+	jsr UPDATETILES
+	jmp l_21C7
+l_21A8
+
+; optimize FAIL ('FINDTHREEINROW', block_attack.pas), line = 1993
+
+	jsr FINDTHREEINROW
+	lda FINDTHREEINROW.RESULT
+	sta FOUNDTHREE
+l_21C7
+l_219B
+
+; optimize OK (block_attack.pas), line = 1997
+
+	lda SWAPTILES.STAGE
+	jeq l_21DF
+
+; optimize FAIL ('ONSWAP', block_attack.pas), line = 1998
+
+	jsr ONSWAP
+	jmp l_21EA
+l_21DF
+
+; optimize OK (block_attack.pas), line = 2000
+
+	lda FIREBTN
+	jne l_21F9
+
+; optimize OK (block_attack.pas), line = 2001
+
+	lda FIREDELAY
+	jne l_2209
+	lda #$01
+	sta FIREDELAY
+l_21EA
+l_2209
+l_21F9
+
+; optimize OK (block_attack.pas), line = 2004
+
+	lda SWAPTILES.STAGE
+	jne l_2224
+	jsr WARNINGJUMPS
+l_2224
+
+; optimize OK (block_attack.pas), line = 2007
+
+	lda STOP
+	jne l_223A
+
+; optimize OK (block_attack.pas), line = 2008
+
+	lda adr.PLAYFIELD+$01
+	ora adr.PLAYFIELD
+	ora adr.PLAYFIELD+$02
+	ora adr.PLAYFIELD+$03
+	ora adr.PLAYFIELD+$04
+	ldy #1
+	ora adr.PLAYFIELD+$05
+	bne @+
+	dey
+@
+	tya
+	sta STOP
+
+; optimize OK (block_attack.pas), line = 2010
+
+	lda GAMEMODE
+	cmp #$01
+	jne l_227D
+	lda SECOND
+	add MINUTE
+	sta :STACKORIGIN+10
+	lda #$00
+	adc #$00
+	ldy #1
+	ora :STACKORIGIN+10
+	beq @+
+	dey
+@
+	tya
+	ora STOP
+	sta STOP
+l_227D
+l_223A
+
+; optimize OK (block_attack.pas), line = 2016
+
+	lda SECOND_
+	cmp SECOND
+	jne l_22B4
+	lda STOP
+	jeq l_22B4
+
+; --- WhileProlog
+	jmp l_22B7
+l_22B8
+
+; optimize FAIL ('SYSTEM.PAUSE_016D', block_attack.pas), line = 2019
+
+	jsr SYSTEM.PAUSE_016D
+	jsr ONSCROLL
+l_22B7
+	lda CNTROW
+	jne l_22B8
+
+; optimize FAIL ('DOGAMEOVER', block_attack.pas), line = 2021
+
+	jsr DOGAMEOVER
+	lda DOGAMEOVER.RESULT
+	jeq l_22D0
+	jsr DOINITGAME
+	jmp l_22DB
+l_22D0
+	jmp b_207F					; break
+l_22DB
+l_22B4
+
+; optimize OK (block_attack.pas), line = 2026
+
+	lda SPEED_CNT
+	cmp SPEED
+	jcs l_22F7x
+	lda:sne SHIFTKEY
+	jmp l_22F7
+l_22F7x
+
+; optimize OK (block_attack.pas), line = 2027
+
+	lda #$00
+	sta SPEED_CNT
+
+; optimize OK (block_attack.pas), line = 2028
+
+	lda #$01
+	sta SCROLLUP
+l_22F7
+
+; optimize OK (block_attack.pas), line = 2031
+
+	lda SCROLLFREEZE+1
+	ora SCROLLFREEZE
+	jeq l_2313
+	lda SCROLLFREEZE
+	bne @+
+	dec SCROLLFREEZE+1
+@
+	dec SCROLLFREEZE
+l_2313
+
+; optimize OK (block_attack.pas), line = 2034
+
+	lda FOUND
+	jeq l_2338
+	lda FOUNDTHREE
+	jne l_2338
+
+; optimize OK (block_attack.pas), line = 2036
+
+	lda SPEEDINC
+	add FOUND
+	sta SPEEDINC
+
+; optimize OK (block_attack.pas), line = 2038
+
+	lda COMBO_CNT
+	jmi l_2354
+	lda COMBO
+	jeq l_2354
+
+; optimize FAIL ('COMBOSCORE', block_attack.pas), line = 2039
+
+	jsr COMBOSCORE
+
+; optimize OK (block_attack.pas), line = 2040
+
+	lda #$00
+	sta COMBO_CNT
+	jmp l_2363
+l_2354
+
+; optimize OK (block_attack.pas), line = 2042
+
+	lda FOUND
+	cmp #$04
+	jcc l_2375
+
+; optimize FAIL ('COMBOSCORE', block_attack.pas), line = 2043
+
+	jsr COMBOSCORE
+
+; optimize OK (block_attack.pas), line = 2044
+
+	lda #$01
+	sta COMBO
+l_2363
+l_2375
+
+; optimize OK (block_attack.pas), line = 2047
+
+	lda SPEEDINC
+	cmp #$0D
+	jcc l_238F
+
+; optimize OK (block_attack.pas), line = 2048
+
+	lda SPEED
+	jeq l_23A2
+	dec SPEED
+l_23A2
+
+; optimize FAIL ('PRINTSPEED', block_attack.pas), line = 2049
+
+	jsr PRINTSPEED
+
+; optimize OK (block_attack.pas), line = 2050
+
+	lda #$00
+	sta SPEEDINC
+l_238F
+
+; optimize OK (block_attack.pas), line = 2053
+
+	lda #$00
+	sta FOUND
+l_2338
+
+; optimize OK (block_attack.pas), line = 2056
+
+	lda COMBO
+	jeq l_23C2
+
+; optimize FAIL (0, block_attack.pas), line = 2057
+
+	inc COMBO_CNT
+
+; optimize OK (block_attack.pas), line = 2058
+
+	lda COMBO_CNT
+	cmp #$81
+	jcc l_23D9
+	lda #$00
+	sta COMBO
+	sta COMBO_CNT
+l_23D9
+l_23C2
+
+; optimize FAIL (0, block_attack.pas), line = 2061
+
+	inc TICK
+
+; optimize FAIL (0, block_attack.pas), line = 2063
+
+	inc FRAME_CNT
+
+; optimize OK (block_attack.pas), line = 2065
+
+	jmp l_207F
+b_207F
+
+; optimize OK (block_attack.pas), line = 2072
+
+	jmp l_206F
+
+; ------------------------------------------------------------
+
+PM_COLOR	= $0600
+PMB_PAGE	= $D800
+DISPLAY_LIST_ADDRESS	= $D800
+CHARSET_RAM_ADDRESS	= $E000
+VIDEO_RAM_ADDRESS_A	= $C000
+VIDEO_RAM_ADDRESS_B	= $B000
+SAPR_PLAYER	= $A400
+BKG_COLOR	= $02
+BKG_PANEL	= $FA
+WIDTH	= $28
+MAX_SPEED	= $64
+adr.MATCH1	= CODEORIGIN+$0122
+.var MATCH1	= adr.MATCH1 .word
+adr.MATCH2	= CODEORIGIN+$0135
+.var MATCH2	= adr.MATCH2 .word
+adr.MATCH3	= CODEORIGIN+$0148
+.var MATCH3	= adr.MATCH3 .word
+adr.SFMOVE	= CODEORIGIN+$015B
+.var SFMOVE	= adr.SFMOVE .word
+adr.SFSWAP	= CODEORIGIN+$016E
+.var SFSWAP	= adr.SFSWAP .word
+adr.VPANEL	= CODEORIGIN+$0181
+.var VPANEL	= adr.VPANEL .word
+adr.PMDIGIT	= CODEORIGIN+$0190
+.var PMDIGIT	= adr.PMDIGIT .word
+adr.DIGITH	= CODEORIGIN+$0230
+.var DIGITH	= adr.DIGITH .word
+adr.GAMEOVER_YN	= CODEORIGIN+$02F0
+.var GAMEOVER_YN	= adr.GAMEOVER_YN .word
+adr.GAMEOVER	= CODEORIGIN+$03B0
+.var GAMEOVER	= adr.GAMEOVER .word
+adr.TIMEOVER_YN	= CODEORIGIN+$0650
+.var TIMEOVER_YN	= adr.TIMEOVER_YN .word
+adr.TIMEOVER	= CODEORIGIN+$0710
+.var TIMEOVER	= adr.TIMEOVER .word
+adr.TRYAGAIN	= CODEORIGIN+$09B0
+.var TRYAGAIN	= adr.TRYAGAIN .word
+adr.TRYAGAIN2	= CODEORIGIN+$0A70
+.var TRYAGAIN2	= adr.TRYAGAIN2 .word
+adr.MONSTER0	= CODEORIGIN+$0B30
+.var MONSTER0	= adr.MONSTER0 .word
+adr.MONSTER1	= CODEORIGIN+$0BC0
+.var MONSTER1	= adr.MONSTER1 .word
+adr.MONSTER2	= CODEORIGIN+$0C50
+.var MONSTER2	= adr.MONSTER2 .word
+adr.PLAYFIELD	= $0680
+.var PLAYFIELD	= adr.PLAYFIELD .word
+adr.MISSILE	= $DB00
+.var MISSILE	= adr.MISSILE .word
+adr.GMSPEED	= [DATAORIGIN+$0098] .array [2]
+.var GMSPEED	= adr.GMSPEED .word
+HISCORE	= DATAORIGIN+$009A
+GAMEMODE	= DATAORIGIN+$009E
+RND	= $D20A
+VSC	= DATAORIGIN+$009F
+CNTROW	= DATAORIGIN+$00A0
+SCROLL	= DATAORIGIN+$00A1
+CNTFOUND	= DATAORIGIN+$00A2
+XSEL	= DATAORIGIN+$00A3
+YSEL	= DATAORIGIN+$00A4
+FOUND	= DATAORIGIN+$00A5
+JOYDELAY	= DATAORIGIN+$00A6
+JOY	= DATAORIGIN+$00A7
+YOLD	= DATAORIGIN+$00A8
+YSHIFT	= DATAORIGIN+$00A9
+TICK	= DATAORIGIN+$00AA
+MATCH	= DATAORIGIN+$00AB
+FRAME_CNT	= DATAORIGIN+$00AC
+MINUTE	= DATAORIGIN+$00AD
+LEFT_EDGE	= DATAORIGIN+$00AE
+RIGHT_EDGE	= DATAORIGIN+$00AF
+SPEEDINC	= DATAORIGIN+$00B0
+SECOND	= DATAORIGIN+$00B1
+SECOND_	= DATAORIGIN+$00B2
+LEVEL	= DATAORIGIN+$00B3
+SPEED	= DATAORIGIN+$00B4
+SPEED_CNT	= DATAORIGIN+$00B5
+COMBO_CNT	= DATAORIGIN+$00B6
+MONSTER0_FRM	= DATAORIGIN+$00B7
+MONSTER1_FRM	= DATAORIGIN+$00B8
+MONSTER2_FRM	= DATAORIGIN+$00B9
+SCROLLFREEZE	= DATAORIGIN+$00BA
+SCORE	= DATAORIGIN+$00BC
+SCORE_	= DATAORIGIN+$00C0
+HISCORE_	= DATAORIGIN+$00C4
+VRAM	= DATAORIGIN+$00C8
+OLD_VBL	= DATAORIGIN+$00CA
+OLD_DLI	= DATAORIGIN+$00CC
+OLD_IRQ	= DATAORIGIN+$00CE
+adr.JUMP	= [DATAORIGIN+$00D0] .array [6]
+.var JUMP	= adr.JUMP .word
+FOUNDTHREE	= DATAORIGIN+$00D6
+SCROLLUP	= DATAORIGIN+$00D7
+COMBO	= DATAORIGIN+$00D8
+SHIFTKEY	= DATAORIGIN+$00D9
+MONSTER_SCORE	= DATAORIGIN+$00DA
+STOP	= DATAORIGIN+$00DB
+FIREDELAY	= DATAORIGIN+$00DC
+FIREBTN	= DATAORIGIN+$00DD
+MSX_PLAY	= DATAORIGIN+$00DE
+MATCH_PLAY	= DATAORIGIN+$00DF
+MOVE_PLAY	= DATAORIGIN+$00E0
+SWAP_PLAY	= DATAORIGIN+$00E1
+MSX_FASTER	= DATAORIGIN+$00E2
+adr.MSX	= DATAORIGIN+$00E3	; [5] OBJECT
+.var MSX	= adr.MSX .word
+MSX.JMP	= DATAORIGIN+$00E3
+MSX.PLAYER	= DATAORIGIN+$00E4
+MSX.MODUL	= DATAORIGIN+$00E6
+adr.SWAPTILES	= DATAORIGIN+$00E8	; [6] RECORD
+.var SWAPTILES	= adr.SWAPTILES .word
+SWAPTILES.STAGE	= DATAORIGIN+$00E8
+SWAPTILES.INDEX	= DATAORIGIN+$00E9
+SWAPTILES.TILE0	= DATAORIGIN+$00EA
+SWAPTILES.TILE1	= DATAORIGIN+$00EB
+SWAPTILES.P	= DATAORIGIN+$00EC
+@exit
+
+@halt	ldx #$00
+	txs
+	.ifdef MAIN.@DEFINES.ROMOFF
+	inc portb
+	.fi
+
+	ldy #$01
+
+	rts
+
+; ------------------------------------------------------------
+
+IOCB@COPY	:16 brk
+
+; ------------------------------------------------------------
+
+.local	@DEFINES
+ATARI
+BASICOFF
+.endl
+
+.local	@RESOURCE
+F_ID0	ins 'assets\ta_charset.zx0'
+F_ID0.end
+F_ID1	ins 'assets\gameover\game_over_anim.zx0'
+F_ID1.end
+F_ID1_A	ins 'assets\gameover\game_over_1.zx0'
+F_ID1_A.end
+F_ID1_B	ins 'assets\gameover\game_over_2.zx0'
+F_ID1_B.end
+F_ID2	ins 'assets\timeover\time_over_anim.zx0'
+F_ID2.end
+F_ID2_A	ins 'assets\timeover\time_over_1.zx0'
+F_ID2_A.end
+F_ID2_B	ins 'assets\timeover\time_over_2.zx0'
+F_ID2_B.end
+T_PM0	ins 'assets\panel_anim\panel.zx0'
+T_PM0.end
+T_TIT	ins 'assets\title\title.zx0'
+T_TIT.end
+T_TIT2	ins 'assets\title\title2.zx0'
+T_TIT2.end
+SAPR_YOSHI
+	dta a(SAPR_YOSHI.end-SAPR_YOSHI-2)
+	ins 'assets\msx_final\Yoshi.Theme.lzss'
+SAPR_YOSHI.end
+SAPR_CRITICAL
+	dta a(SAPR_CRITICAL.end-SAPR_CRITICAL-2)
+	ins 'assets\msx_final\Yoshi.Theme.Critical.lzss'
+SAPR_CRITICAL.end
+SAPR_MODUL
+	dta a(SAPR_MODUL.end-SAPR_MODUL-2)
+	ins 'assets\msx\lzss\battack.lz16'
+SAPR_MODUL.end
+.endl
+
+.endl							; MAIN
+
+; ------------------------------------------------------------
+; ------------------------------------------------------------
+
+.macro	UNITINITIALIZATION
+
+	.ifdef MAIN.SYSTEM.@UnitInit
+	jsr MAIN.SYSTEM.@UnitInit
+	.fi
+
+	.ifdef MAIN.ATARI.@UnitInit
+	jsr MAIN.ATARI.@UnitInit
+	.fi
+
+	.ifdef MAIN.CRT.@UnitInit
+	jsr MAIN.CRT.@UnitInit
+	.fi
+
+	.ifdef MAIN.DOS.@UnitInit
+	jsr MAIN.DOS.@UnitInit
+	.fi
+
+	.ifdef MAIN.STRUTILS.@UnitInit
+	jsr MAIN.STRUTILS.@UnitInit
+	.fi
+
+	.ifdef MAIN.SYSUTILS.@UnitInit
+	jsr MAIN.SYSUTILS.@UnitInit
+	.fi
+
+	.ifdef MAIN.JGP2.@UnitInit
+	jsr MAIN.JGP2.@UnitInit
+	.fi
+
+	.ifdef MAIN.JOYSTICK.@UnitInit
+	jsr MAIN.JOYSTICK.@UnitInit
+	.fi
+
+	.ifdef MAIN.TYPES.@UnitInit
+	jsr MAIN.TYPES.@UnitInit
+	.fi
+
+	.ifdef MAIN.GRAPH.@UnitInit
+	jsr MAIN.GRAPH.@UnitInit
+	.fi
+
+	.ifdef MAIN.ZX5.@UnitInit
+	jsr MAIN.ZX5.@UnitInit
+	.fi
+
+	.ifdef MAIN.MISC.@UnitInit
+	jsr MAIN.MISC.@UnitInit
+	.fi
+
+	.ifdef MAIN.SYSREQ.@UnitInit
+	jsr MAIN.SYSREQ.@UnitInit
+	.fi
+
+	.ifdef MAIN.SAPLZSS.@UnitInit
+	jsr MAIN.SAPLZSS.@UnitInit
+	.fi
+.endm
+
+; ------------------------------------------------------------
+
+	ift .SIZEOF(MAIN.SYSTEM) > 0
+	.print 'SYSTEM: ',MAIN.SYSTEM,'..',MAIN.SYSTEM+.SIZEOF(MAIN.SYSTEM)-1
+	eif
+
+	ift .SIZEOF(MAIN.ATARI) > 0
+	.print 'ATARI: ',MAIN.ATARI,'..',MAIN.ATARI+.SIZEOF(MAIN.ATARI)-1
+	eif
+
+	ift .SIZEOF(MAIN.CRT) > 0
+	.print 'CRT: ',MAIN.CRT,'..',MAIN.CRT+.SIZEOF(MAIN.CRT)-1
+	eif
+
+	ift .SIZEOF(MAIN.DOS) > 0
+	.print 'DOS: ',MAIN.DOS,'..',MAIN.DOS+.SIZEOF(MAIN.DOS)-1
+	eif
+
+	ift .SIZEOF(MAIN.STRUTILS) > 0
+	.print 'STRUTILS: ',MAIN.STRUTILS,'..',MAIN.STRUTILS+.SIZEOF(MAIN.STRUTILS)-1
+	eif
+
+	ift .SIZEOF(MAIN.SYSUTILS) > 0
+	.print 'SYSUTILS: ',MAIN.SYSUTILS,'..',MAIN.SYSUTILS+.SIZEOF(MAIN.SYSUTILS)-1
+	eif
+
+	ift .SIZEOF(MAIN.JGP2) > 0
+	.print 'JGP2: ',MAIN.JGP2,'..',MAIN.JGP2+.SIZEOF(MAIN.JGP2)-1
+	eif
+
+	ift .SIZEOF(MAIN.JOYSTICK) > 0
+	.print 'JOYSTICK: ',MAIN.JOYSTICK,'..',MAIN.JOYSTICK+.SIZEOF(MAIN.JOYSTICK)-1
+	eif
+
+	ift .SIZEOF(MAIN.TYPES) > 0
+	.print 'TYPES: ',MAIN.TYPES,'..',MAIN.TYPES+.SIZEOF(MAIN.TYPES)-1
+	eif
+
+	ift .SIZEOF(MAIN.GRAPH) > 0
+	.print 'GRAPH: ',MAIN.GRAPH,'..',MAIN.GRAPH+.SIZEOF(MAIN.GRAPH)-1
+	eif
+
+	ift .SIZEOF(MAIN.ZX5) > 0
+	.print 'ZX5: ',MAIN.ZX5,'..',MAIN.ZX5+.SIZEOF(MAIN.ZX5)-1
+	eif
+
+	ift .SIZEOF(MAIN.MISC) > 0
+	.print 'MISC: ',MAIN.MISC,'..',MAIN.MISC+.SIZEOF(MAIN.MISC)-1
+	eif
+
+	ift .SIZEOF(MAIN.SYSREQ) > 0
+	.print 'SYSREQ: ',MAIN.SYSREQ,'..',MAIN.SYSREQ+.SIZEOF(MAIN.SYSREQ)-1
+	eif
+
+	ift .SIZEOF(MAIN.SAPLZSS) > 0
+	.print 'SAPLZSS: ',MAIN.SAPLZSS,'..',MAIN.SAPLZSS+.SIZEOF(MAIN.SAPLZSS)-1
+	eif
+
+.nowarn	.print 'CODE: ',CODEORIGIN,'..',MAIN.@RESOURCE-1
+	.print '$R F_ID0',' ',"'assets\ta_charset.zx0'",' ',MAIN.@RESOURCE.F_ID0,'..',MAIN.@RESOURCE.F_ID0.end-1
+	.print '$R F_ID1',' ',"'assets\gameover\game_over_anim.zx0'",' ',MAIN.@RESOURCE.F_ID1,'..',MAIN.@RESOURCE.F_ID1.end-1
+	.print '$R F_ID1_A',' ',"'assets\gameover\game_over_1.zx0'",' ',MAIN.@RESOURCE.F_ID1_A,'..',MAIN.@RESOURCE.F_ID1_A.end-1
+	.print '$R F_ID1_B',' ',"'assets\gameover\game_over_2.zx0'",' ',MAIN.@RESOURCE.F_ID1_B,'..',MAIN.@RESOURCE.F_ID1_B.end-1
+	.print '$R F_ID2',' ',"'assets\timeover\time_over_anim.zx0'",' ',MAIN.@RESOURCE.F_ID2,'..',MAIN.@RESOURCE.F_ID2.end-1
+	.print '$R F_ID2_A',' ',"'assets\timeover\time_over_1.zx0'",' ',MAIN.@RESOURCE.F_ID2_A,'..',MAIN.@RESOURCE.F_ID2_A.end-1
+	.print '$R F_ID2_B',' ',"'assets\timeover\time_over_2.zx0'",' ',MAIN.@RESOURCE.F_ID2_B,'..',MAIN.@RESOURCE.F_ID2_B.end-1
+	.print '$R T_PM0',' ',"'assets\panel_anim\panel.zx0'",' ',MAIN.@RESOURCE.T_PM0,'..',MAIN.@RESOURCE.T_PM0.end-1
+	.print '$R T_TIT',' ',"'assets\title\title.zx0'",' ',MAIN.@RESOURCE.T_TIT,'..',MAIN.@RESOURCE.T_TIT.end-1
+	.print '$R T_TIT2',' ',"'assets\title\title2.zx0'",' ',MAIN.@RESOURCE.T_TIT2,'..',MAIN.@RESOURCE.T_TIT2.end-1
+	.print '$R SAPR_YOSHI',' ',"'assets\msx_final\Yoshi.Theme.lzss'",' ',MAIN.@RESOURCE.SAPR_YOSHI,'..',MAIN.@RESOURCE.SAPR_YOSHI.end-1
+	.print '$R SAPR_CRITICAL',' ',"'assets\msx_final\Yoshi.Theme.Critical.lzss'",' ',MAIN.@RESOURCE.SAPR_CRITICAL,'..',MAIN.@RESOURCE.SAPR_CRITICAL.end-1
+	.print '$R SAPR_MODUL',' ',"'assets\msx\lzss\battack.lz16'",' ',MAIN.@RESOURCE.SAPR_MODUL,'..',MAIN.@RESOURCE.SAPR_MODUL.end-1
+
+; ------------------------------------------------------------
+
+	?adr = *
+	ift (?adr < ?old_adr) && (?old_adr - ?adr < $120)
+	?adr = ?old_adr
+	eif
+
+	org ?adr
+	?old_adr = *
+
+DATAORIGIN
+.by  $28 $00 $18 $00 $2D $0C $00 $00  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00
+.by  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00
+.by  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00
+.by  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $27 $00 $00 $00 $17 $00  $00 $00 $00 $00 $00 $00 $00 $00
+.by  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00
+.by  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00
+.by  $00 $00 $00 $00 $00 $00 $00 $00  $50 $19 $F4 $01
+
+VARINITSIZE	= *-DATAORIGIN
+VARDATASIZE	= 491
+
+PROGRAMSTACK	= DATAORIGIN+VARDATASIZE
+
+	.print 'DATA: ',DATAORIGIN,'..',PROGRAMSTACK
+
+	run START
+
+; ------------------------------------------------------------
+
+.macro	STATICDATA
+.by  $04 $54 $52 $55 $45 $00 $05 $46  $41 $4C $53 $45 $00 $15 $41 $4E  $54 $49 $43 $20 $50 $41 $4C $20
+.by  $69 $73 $20 $72 $65 $71 $75 $69  $72 $65 $64 $00 $15 $20 $36 $35  $30 $32 $20 $43 $50 $55 $20 $69
+.by  $73 $20 $72 $65 $71 $75 $69 $72  $65 $64 $00 $19 $53 $65 $63 $6F  $6E $64 $20 $50 $4F $4B $45 $59
+.by  $20 $6E $6F $74 $20 $64 $65 $74  $65 $63 $74 $65 $64 $00 $15 $44  $69 $73 $61 $62 $6C $65 $20 $65
+.by  $78 $74 $65 $72 $6E $61 $6C $20  $63 $61 $72 $74 $00 $0D $50 $72  $65 $73 $73 $20 $61 $6E $79 $20
+.by  $6B $65 $79 $00 $0D $73 $61 $70  $72 $5F $63 $72 $69 $74 $69 $63  $61 $6C $00 $0A $73 $61 $70 $72
+.by  $5F $79 $6F $73 $68 $69 $00 $05  $74 $5F $70 $6D $30 $00 $05 $66  $5F $69 $64 $30 $00 $05 $66 $5F
+.by  $69 $64 $32 $00 $05 $66 $5F $69  $64 $31 $00 $07 $66 $5F $69 $64  $32 $5F $61 $00 $07 $66 $5F $69
+.by  $64 $32 $5F $62 $00 $07 $66 $5F  $69 $64 $31 $5F $61 $00 $07 $66  $5F $69 $64 $31 $5F $62 $00 $05
+.by  $74 $5F $74 $69 $74 $00 $0A $73  $61 $70 $72 $5F $6D $6F $64 $75  $6C $00 $06 $74 $5F $74 $69 $74
+.by  $32 $00 $03 $02 $02 $01 $01 $02  $02 $03 $03 $03 $03 $03 $03 $03  $02 $03 $28 $14 $14 $28 $50 $50
+.by  $A0 $A0 $40 $50 $50 $50 $28 $28  $A0 $A0 $18 $18 $0C $18 $30 $30  $60 $60 $C0 $C0 $C0 $C0 $18 $0C
+.by  $C0 $C0 $00 $4F $A8 $4E $A8 $4D  $A8 $4C $A6 $4B $A4 $49 $A3 $48  $A2 $00 $A0 $00 $00 $00 $37 $A8
+.by  $36 $A8 $35 $A8 $34 $A6 $33 $A4  $32 $A3 $31 $A2 $00 $A0 $00 $00  $00 $1F $A8 $1E $A8 $1D $A8 $1C
+.by  $A6 $1B $A4 $19 $A3 $18 $A2 $E0  $A0 $00 $00 $00 $00 $A3 $00 $A0  $00 $A3 $00 $A0 $00 $A3 $00 $A0
+.by  $00 $A0 $00 $A0 $00 $00 $00 $00  $04 $00 $02 $00 $01 $00 $00 $00  $02 $00 $04 $00 $00 $00 $00 $00
+.by  $00 $00 $FA $FA $FA $FA $FA $FA  $FA $FA $00 $00 $00 $00 $00 $00  $38 $38 $4C $4C $54 $54 $64 $64
+.by  $44 $44 $44 $44 $38 $38 $00 $00  $10 $10 $30 $30 $10 $10 $10 $10  $10 $10 $10 $10 $7C $7C $00 $00
+.by  $38 $38 $04 $04 $38 $38 $40 $40  $40 $40 $40 $40 $7C $7C $00 $00  $7C $7C $08 $08 $18 $18 $04 $04
+.by  $04 $04 $44 $44 $38 $38 $00 $00  $40 $40 $50 $50 $7C $7C $10 $10  $10 $10 $10 $10 $10 $10 $00 $00
+.by  $7C $7C $40 $40 $78 $78 $04 $04  $04 $04 $44 $44 $38 $38 $00 $00  $38 $38 $40 $40 $78 $78 $44 $44
+.by  $44 $44 $44 $44 $38 $38 $00 $00  $7C $7C $04 $04 $08 $08 $10 $10  $10 $10 $10 $10 $10 $10 $00 $00
+.by  $38 $38 $44 $44 $38 $38 $44 $44  $44 $44 $44 $44 $38 $38 $00 $00  $3C $3C $44 $44 $44 $44 $3C $3C
+.by  $04 $04 $04 $04 $04 $04 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00  $60 $A0 $A0 $A0 $A0 $C0 $00 $00
+.by  $C0 $40 $40 $40 $40 $40 $00 $00  $C0 $20 $60 $80 $80 $E0 $00 $00  $E0 $20 $60 $20 $20 $C0 $00 $00
+.by  $80 $A0 $A0 $E0 $20 $20 $00 $00  $E0 $80 $E0 $20 $20 $C0 $00 $00  $C0 $80 $E0 $A0 $A0 $C0 $00 $00
+.by  $E0 $20 $20 $20 $20 $20 $00 $00  $E0 $A0 $E0 $A0 $A0 $E0 $00 $00  $E0 $A0 $A0 $E0 $20 $20 $00 $00
+.by  $00 $40 $40 $00 $40 $40 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00  $06 $0A $0A $0A $0A $0C $00 $00
+.by  $0C $04 $04 $04 $04 $04 $00 $00  $0C $02 $06 $08 $08 $0E $00 $00  $0E $02 $06 $02 $02 $0C $00 $00
+.by  $08 $0A $0A $0E $02 $02 $00 $00  $0E $08 $0E $02 $02 $0C $00 $00  $0C $08 $0E $0A $0A $0C $00 $00
+.by  $0E $02 $02 $02 $02 $02 $00 $00  $0E $0A $0E $0A $0A $0E $00 $00  $0E $0A $0A $0E $02 $02 $00 $00
+.by  $00 $04 $04 $00 $04 $04 $00 $00  $00 $01 $00 $01 $00 $01 $02 $03  $04 $05 $06 $07 $08 $09 $0A $0B
+.by  $0C $0D $00 $01 $00 $01 $00 $01  $00 $01 $00 $01 $00 $01 $02 $03  $04 $05 $06 $07 $08 $09 $0A $0B
+.by  $0C $0D $00 $01 $00 $01 $00 $01  $0E $0F $10 $11 $12 $13 $14 $15  $16 $17 $18 $19 $1A $1B $1C $1D
+.by  $1E $1F $00 $01 $00 $01 $00 $01  $0E $0F $10 $11 $12 $13 $14 $15  $16 $17 $18 $19 $1A $1B $1C $1D
+.by  $1E $1F $00 $01 $00 $01 $00 $01  $20 $21 $22 $23 $24 $25 $26 $27  $28 $29 $2A $2B $2C $2D $2E $2F
+.by  $30 $31 $32 $33 $00 $01 $00 $01  $20 $21 $22 $23 $24 $25 $26 $27  $28 $29 $2A $2B $2C $2D $2E $2F
+.by  $30 $31 $32 $33 $00 $01 $00 $01  $00 $01 $00 $01 $34 $35 $36 $37  $38 $39 $3A $3B $3C $3D $3E $3F
+.by  $40 $41 $42 $43 $44 $45 $00 $01  $00 $01 $00 $01 $34 $35 $36 $37  $38 $39 $3A $3B $3C $3D $3E $3F
+.by  $40 $41 $42 $43 $44 $45 $00 $01  $00 $00 $01 $02 $03 $00 $04 $05  $06 $07 $08 $09 $0A $0B $0C $0D
+.by  $0E $00 $00 $00 $00 $00 $00 $00  $0F $10 $11 $12 $13 $14 $15 $16  $17 $18 $19 $1A $1B $1C $1D $1E
+.by  $1F $00 $00 $00 $00 $00 $00 $00  $20 $21 $22 $23 $24 $25 $26 $27  $28 $29 $2A $2B $2C $2D $2E $2F
+.by  $30 $00 $00 $00 $00 $00 $00 $00  $00 $31 $32 $33 $34 $35 $36 $37  $38 $39 $3A $3B $3C $3D $3E $3F
+.by  $40 $41 $42 $43 $00 $00 $00 $00  $00 $00 $00 $00 $0F $10 $44 $45  $46 $47 $48 $49 $4A $4B $4C $4D
+.by  $4E $4F $50 $51 $00 $00 $00 $00  $00 $00 $00 $00 $52 $53 $54 $55  $56 $57 $58 $59 $5A $5B $5C $5D
+.by  $5E $5F $60 $61 $62 $00 $00 $00  $00 $00 $00 $00 $00 $63 $64 $65  $66 $00 $00 $00 $00 $00 $00 $00
+.by  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $01 $02  $03 $04 $05 $06 $07 $08 $09 $0A
+.by  $0B $00 $00 $00 $00 $00 $00 $00  $00 $0C $0D $0E $0F $10 $11 $12  $13 $14 $15 $16 $17 $18 $19 $1A
+.by  $1B $00 $00 $00 $00 $00 $00 $00  $1C $1D $1E $1F $20 $21 $22 $23  $24 $25 $26 $27 $28 $29 $2A $2B
+.by  $2C $00 $00 $00 $00 $00 $00 $00  $2D $2E $2F $30 $31 $32 $33 $34  $35 $36 $37 $38 $39 $3A $3B $3C
+.by  $3D $0A $3E $3F $00 $00 $00 $00  $00 $00 $00 $00 $00 $0C $40 $41  $42 $43 $44 $45 $46 $47 $48 $49
+.by  $4A $4B $4C $4D $00 $00 $00 $00  $00 $00 $00 $00 $4E $4F $50 $51  $52 $53 $54 $55 $56 $57 $58 $59
+.by  $5A $5B $5C $5D $5E $00 $00 $00  $00 $00 $00 $00 $00 $5F $60 $61  $62 $63 $00 $00 $00 $00 $00 $00
+.by  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $01 $02  $00 $03 $04 $05 $06 $07 $08 $09
+.by  $0A $00 $00 $00 $00 $00 $00 $00  $00 $0B $0C $0D $0E $0F $10 $11  $12 $13 $14 $15 $16 $17 $18 $19
+.by  $1A $00 $00 $00 $00 $00 $00 $00  $1B $1C $1D $1E $1F $20 $21 $22  $23 $24 $25 $26 $27 $28 $29 $2A
+.by  $2B $00 $00 $00 $00 $00 $00 $00  $2C $2D $2E $2F $30 $31 $32 $07  $33 $34 $35 $36 $37 $38 $39 $3A
+.by  $3B $09 $3C $3D $00 $00 $00 $00  $00 $00 $3E $3F $00 $0B $40 $41  $42 $43 $44 $45 $46 $47 $48 $49
+.by  $4A $4B $4C $4D $00 $00 $00 $00  $00 $00 $00 $00 $4E $4F $50 $51  $52 $53 $54 $55 $56 $57 $58 $59
+.by  $5A $5B $5C $5D $5E $00 $00 $00  $00 $00 $00 $00 $00 $5F $60 $61  $62 $63 $64 $00 $65 $66 $00 $00
+.by  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $01 $00 $02 $03
+.by  $04 $00 $00 $00 $00 $00 $00 $00  $00 $05 $06 $07 $08 $09 $0A $0B  $0C $0D $0E $0F $10 $11 $12 $13
+.by  $14 $00 $00 $00 $00 $00 $00 $00  $15 $16 $17 $18 $19 $1A $1B $1C  $1D $1E $1F $20 $21 $22 $23 $24
+.by  $25 $00 $00 $00 $00 $00 $00 $00  $26 $27 $28 $29 $2A $2B $2C $00  $2D $2E $2F $30 $31 $32 $33 $34
+.by  $35 $03 $04 $00 $00 $00 $00 $00  $00 $36 $37 $38 $39 $05 $3A $3B  $3C $3D $3E $3F $40 $41 $42 $43
+.by  $44 $45 $46 $47 $00 $00 $00 $00  $00 $00 $00 $00 $15 $16 $48 $49  $4A $4B $4C $4D $4E $4F $50 $51
+.by  $52 $53 $54 $55 $56 $00 $00 $00  $00 $00 $00 $00 $57 $58 $59 $5A  $5B $5C $5D $5E $5F $60 $61 $62
+.by  $63 $36 $64 $65 $00 $00 $00 $00  $00 $01 $00 $01 $00 $01 $00 $01  $00 $01 $00 $01 $00 $01 $00 $01
+.by  $00 $01 $00 $01 $00 $01 $00 $01  $00 $01 $00 $01 $00 $01 $00 $01  $00 $01 $00 $01 $00 $01 $00 $01
+.by  $00 $01 $00 $01 $00 $01 $00 $01  $82 $83 $84 $85 $86 $07 $88 $09  $8A $8B $8C $8D $8E $8F $90 $91
+.by  $92 $93 $94 $15 $00 $01 $00 $01  $82 $83 $84 $85 $86 $87 $88 $89  $8A $8B $8C $8D $8E $8F $90 $91
+.by  $92 $93 $94 $95 $00 $01 $00 $01  $96 $97 $98 $99 $9A $9B $9C $9D  $9E $9F $A0 $A1 $A2 $A3 $A4 $A5
+.by  $A6 $A7 $A8 $A9 $00 $01 $00 $01  $16 $97 $98 $99 $9A $9B $9C $9D  $9E $9F $A0 $A1 $A2 $A3 $A4 $A5
+.by  $A6 $A7 $A8 $A9 $00 $01 $00 $01  $2A $AB $AC $AD $AE $AF $B0 $B1  $B2 $B3 $B4 $B5 $B6 $B7 $B8 $B9
+.by  $BA $BB $BC $BD $00 $01 $00 $01  $2A $2B $2C $2D $2E $2F $30 $31  $32 $33 $34 $35 $36 $37 $38 $39
+.by  $3A $3B $3C $3D $00 $01 $00 $01  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00
+.by  $00 $00 $00 $00 $00 $00 $00 $00  $81 $82 $83 $84 $85 $86 $87 $88  $89 $8A $8B $8C $8D $8E $8F $90
+.by  $91 $92 $93 $94 $00 $00 $00 $00  $95 $96 $97 $98 $99 $9A $9B $9C  $9D $9E $9F $A0 $A1 $A2 $A3 $A4
+.by  $A5 $9F $A6 $A7 $00 $00 $00 $00  $00 $A8 $A9 $AA $AB $AC $AD $A1  $AE $AF $9F $B0 $B1 $B2 $B3 $B4
+.by  $B5 $B6 $B7 $B8 $00 $00 $00 $00  $00 $B9 $BA $BB $BC $BD $BE $BF  $C0 $C1 $C2 $C3 $C4 $C5 $C6 $C7
+.by  $C8 $C9 $CA $CB $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00
+.by  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00
+.by  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00
+.by  $00 $00 $00 $00 $00 $00 $00 $00  $81 $82 $83 $84 $85 $86 $87 $88  $89 $8A $8B $8C $8D $8E $8F $90
+.by  $91 $8F $84 $92 $00 $00 $00 $00  $93 $94 $95 $96 $97 $98 $99 $9A  $9B $9C $9D $9E $9F $A0 $A1 $A2
+.by  $A3 $A4 $A5 $A6 $00 $00 $00 $00  $00 $A7 $A8 $A9 $AA $AB $AC $AD  $AE $AF $A4 $B0 $B1 $B2 $B3 $B4
+.by  $B5 $B6 $B7 $B8 $00 $00 $00 $00  $00 $B9 $BA $BB $BC $BD $BE $BF  $C0 $C1 $C2 $C3 $C4 $C5 $C6 $C7
+.by  $C8 $C9 $CA $CB $00 $00 $00 $00  $00 $CC $CD $CE $CD $CF $80 $D0  $CE $80 $D0 $CE $D1 $CC $D1 $D2
+.by  $D3 $CE $CC $D1 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00
+.by  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00
+.by  $00 $00 $00 $00 $00 $00 $00 $00  $81 $82 $83 $84 $85 $80 $86 $80  $81 $85 $87 $88 $89 $85 $8A $8B
+.by  $84 $8A $84 $80 $00 $00 $00 $00  $8C $8D $8E $8F $90 $91 $92 $93  $94 $95 $96 $97 $98 $99 $9A $9B
+.by  $9C $9D $9E $9F $00 $00 $00 $00  $A0 $A1 $A2 $A3 $A4 $A5 $A6 $A7  $A8 $A9 $AA $AB $AC $AD $AE $AF
+.by  $B0 $B1 $B2 $B3 $00 $00 $00 $00  $00 $B4 $B5 $B6 $B7 $B8 $B9 $BA  $BB $BC $BD $BE $BF $C0 $C1 $C2
+.by  $C3 $C4 $C5 $C6 $00 $00 $00 $00  $00 $C7 $C8 $C9 $CA $CB $CC $CD  $C9 $CE $CF $D0 $D1 $D2 $D3 $D4
+.by  $D5 $D6 $D7 $D1 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00
+.by  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00
+.by  $00 $00 $00 $00 $00 $00 $00 $00  $80 $81 $82 $80 $80 $80 $82 $80  $80 $80 $80 $82 $83 $80 $80 $80
+.by  $80 $80 $80 $80 $00 $00 $00 $00  $84 $85 $86 $87 $88 $89 $8A $8B  $8C $8D $8E $8F $90 $91 $92 $93
+.by  $94 $95 $96 $97 $00 $00 $00 $00  $98 $99 $9A $9B $9C $9D $9E $9F  $A0 $A1 $A2 $A3 $A4 $A5 $A6 $A7
+.by  $A8 $A9 $AA $AB $00 $00 $00 $00  $00 $AC $AD $AE $AF $B0 $B1 $A4  $B2 $B3 $A2 $B4 $B5 $B6 $B7 $B8
+.by  $B9 $BA $BB $BC $00 $00 $00 $00  $80 $BD $BE $BF $C0 $C1 $C2 $C3  $C4 $C5 $C6 $C7 $C8 $C9 $CA $CB
+.by  $CC $CD $CE $CF $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00  $00 $00 $00 $00 $00 $00 $00 $00
+.by  $00 $00 $00 $00 $00 $00 $00 $00  $00 $01 $00 $01 $00 $01 $00 $01  $00 $01 $00 $01 $00 $01 $00 $01
+.by  $00 $01 $00 $01 $00 $01 $00 $01  $00 $01 $00 $01 $00 $01 $00 $01  $00 $01 $00 $01 $00 $01 $00 $01
+.by  $00 $01 $00 $01 $00 $01 $00 $01  $46 $C7 $C8 $C9 $CA $CB $CC $CD  $CE $CF $D0 $D1 $D2 $D3 $D4 $D5
+.by  $D6 $D7 $D8 $D9 $00 $01 $00 $01  $46 $C7 $C8 $C9 $CA $CB $4C $CD  $CE $CF $D0 $D1 $D2 $D3 $D4 $D5
+.by  $D6 $D7 $D8 $D9 $00 $01 $00 $01  $00 $01 $00 $01 $5A $5B $5C $5D  $5E $5F $00 $01 $60 $61 $62 $63
+.by  $64 $65 $00 $01 $00 $01 $00 $01  $00 $01 $00 $01 $5A $5B $5C $5D  $5E $5F $00 $01 $60 $61 $62 $63
+.by  $64 $65 $00 $01 $00 $01 $00 $01  $00 $01 $00 $01 $66 $67 $68 $69  $6A $6B $00 $01 $6C $6D $6E $6F
+.by  $70 $71 $00 $01 $00 $01 $00 $01  $00 $01 $00 $01 $66 $67 $68 $69  $6A $6B $00 $01 $6C $6D $6E $6F
+.by  $70 $71 $00 $01 $00 $01 $00 $01  $00 $01 $00 $01 $00 $01 $00 $01  $00 $01 $00 $01 $00 $01 $00 $01
+.by  $00 $01 $00 $01 $00 $01 $00 $01  $00 $01 $00 $01 $00 $01 $00 $01  $00 $01 $00 $01 $00 $01 $00 $01
+.by  $00 $01 $00 $01 $00 $01 $00 $01  $3E $BF $C0 $C1 $C2 $C3 $C4 $C5  $C6 $C7 $C8 $C9 $CA $CB $CC $CD
+.by  $CE $CF $D0 $D1 $00 $01 $00 $01  $3E $BF $C0 $C1 $C2 $C3 $44 $C5  $C6 $C7 $C8 $C9 $CA $CB $CC $CD
+.by  $CE $CF $D0 $D1 $00 $01 $00 $01  $00 $01 $00 $01 $52 $53 $54 $55  $56 $57 $00 $01 $58 $59 $5A $5B
+.by  $5C $5D $00 $01 $00 $01 $00 $01  $00 $01 $00 $01 $52 $53 $54 $55  $56 $57 $00 $01 $58 $59 $5A $5B
+.by  $5C $5D $00 $01 $00 $01 $00 $01  $00 $01 $00 $01 $5E $5F $60 $61  $62 $63 $00 $01 $64 $65 $66 $67
+.by  $68 $69 $00 $01 $00 $01 $00 $01  $00 $01 $00 $01 $5E $5F $60 $61  $62 $63 $00 $01 $64 $65 $66 $67
+.by  $68 $69 $00 $01 $00 $01 $00 $01  $0E $D7 $8F $4F $0B $2F $26 $00  $10 $0A $00 $15 $14 $0D $2C $2C
+.by  $1C $54 $20 $44 $00 $00 $40 $FE  $0E $D7 $8F $4B $0B $2B $26 $00  $10 $0A $00 $15 $14 $0C $2C $2D
+.by  $1C $54 $20 $44 $00 $00 $40 $FE  $0E $D7 $89 $49 $09 $2B $26 $00  $11 $0B $01 $11 $14 $0C $2C $2C
+.by  $1D $54 $20 $44 $00 $00 $40 $FE  $4E $57 $6F $4F $6B $4F $66 $E0  $51 $5A $F0 $53 $03 $51 $55 $F4
+.by  $76 $65 $40 $04 $00 $00 $00 $81  $4E $57 $6F $4B $6B $4B $66 $E0  $51 $5A $F0 $53 $03 $01 $05 $54
+.by  $56 $F5 $70 $64 $40 $00 $00 $81  $4E $57 $69 $49 $49 $6B $E6 $50  $59 $F2 $50 $13 $03 $41 $05 $04
+.by  $56 $55 $F0 $74 $60 $40 $00 $81  $E0 $32 $18 $0A $08 $42 $2A $23  $05 $08 $80 $17 $2B $17 $0F $20
+.by  $07 $0B $13 $07 $00 $00 $00 $E8  $E0 $32 $18 $0A $08 $82 $8A $43  $45 $08 $80 $17 $28 $11 $27 $01
+.by  $27 $01 $20 $01 $0B $00 $00 $E8  $E0 $32 $18 $0A $08 $82 $8A $83  $45 $08 $80 $17 $28 $11 $4F $01
+.by  $5F $0F $41 $00 $1B $00 $00 $E8  $3E $7E $86 $03 $03 $13 $8B $8B  $82 $C4 $7A $76 $A7 $E3 $F5 $73
+.by  $60 $E0 $C0 $80 $00 $00 $00 $00  $3E $7E $86 $03 $03 $23 $A3 $93  $92 $C4 $7A $76 $A7 $63 $B5 $23
+.by  $B0 $20 $20 $C0 $80 $00 $00 $00  $3E $7E $86 $03 $03 $23 $A3 $A3  $92 $C4 $7A $76 $A7 $63 $D5 $13
+.by  $D0 $90 $10 $E0 $80 $00 $00 $00  $0F $47 $23 $51 $59 $04 $22 $14  $01 $2A $19 $2A $1A $08 $02 $05
+.by  $02 $01 $00 $00 $00 $00 $00 $4C  $0F $47 $2B $51 $59 $04 $22 $14  $01 $2A $18 $2A $1A $08 $02 $05
+.by  $02 $01 $00 $00 $00 $00 $00 $4C  $0F $47 $2B $51 $59 $04 $22 $14  $01 $2A $18 $2A $1A $08 $02 $05
+.by  $02 $01 $00 $00 $00 $00 $00 $4C  $46 $54 $48 $51 $E3 $A4 $A8 $E5  $70 $FA $19 $0B $49 $EA $0C $1C
+.by  $78 $70 $E0 $00 $00 $00 $00 $00  $46 $54 $4A $51 $E3 $A4 $A8 $E5  $10 $0A $09 $0B $69 $EA $6C $24
+.by  $31 $5E $EC $43 $00 $00 $00 $00  $46 $54 $4A $51 $E3 $A4 $A8 $E5  $10 $0A $09 $0B $69 $EA $6C $34
+.by  $10 $58 $EF $44 $02 $00 $00 $00  $00 $00 $A8 $00 $50 $01 $F8 $01
+.endm
+
+	end

@@ -1,0 +1,23 @@
+f_id0	rcdata	'assets\ta_charset.zx0'
+
+f_id1		rcdata	'assets\gameover\game_over_anim.zx0'
+f_id1_a	rcdata	'assets\gameover\game_over_1.zx0'
+f_id1_b	rcdata	'assets\gameover\game_over_2.zx0'
+
+f_id2		rcdata	'assets\timeover\time_over_anim.zx0'
+f_id2_a	rcdata	'assets\timeover\time_over_1.zx0'
+f_id2_b	rcdata	'assets\timeover\time_over_2.zx0'
+
+t_pm0		rcdata	'assets\panel_anim\panel.zx0'
+t_tit		rcdata	'assets\title\title.zx0'
+t_tit2		rcdata	'assets\title\title2.zx0'
+
+sapr_yoshi	sapr	'assets\msx_final\Yoshi.Theme.lzss'
+sapr_critical	sapr	'assets\msx_final\Yoshi.Theme.Critical.lzss'
+
+sapr_modul	sapr	'assets\msx\lzss\battack.lz16'
+
+sapr_player	saprplay
+
+#t_id0	rcdata	'assets\tetris_fnt.zx0'
+#t_id1	rcdata	'assets\tetris_scr.zx0'
