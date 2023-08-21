@@ -7,7 +7,9 @@ https://demozoo.org/productions/325906/
 based on Tetris Attack, https://www.gameshaha.net/classic-tetris-attack/
 
 Code: Tomasz (Tebe) Biela (2021-2023), program written in MadPascal (https://github.com/tebe6502/Mad-Pascal)
+
 Graphics: Jaroslaw (Odyn1ec) Wyszynski
+
 Music: Piotr (LiSU) Lis, Vin (VinsCool) Samuel
 
 Use joystick port 1 or keyboard
