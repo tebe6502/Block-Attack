@@ -4,7 +4,7 @@ https://demozoo.org/productions/325906/
 
     mp.exe block_attack.pas -ipath:[mad_pascal_path]\lib\ -code:980
 
-based on: Tetris Attack, https://www.gameshaha.net/classic-tetris-attack/
+based on Tetris Attack, https://www.gameshaha.net/classic-tetris-attack/
 
 Code: Tomasz (Tebe) Biela (2021-2023), program written in MadPascal (https://github.com/tebe6502/Mad-Pascal)
 Graphics: Jaroslaw (Odyn1ec) Wyszynski
