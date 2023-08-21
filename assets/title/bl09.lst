@@ -1,0 +1,704 @@
+mads 2.1.6 build 62 (3 Jun 23)
+Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm
+     1
+     2 				// Block Attack Title Screen
+     3
+     4 				/***************************************/
+     5 				/*  Use MADS http://mads.atari8.info/  */
+     6 				/*  Mode: DLI (char mode)              */
+     7 				/***************************************/
+     8
+     9 					icl "bl09.h"
+Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.h
+   275 					opt l+
+    10
+    11 = 0014			cloc	= $14
+    12
+    13 					org $f0
+    14
+    15 = 00F0			fcnt	.ds 2
+    16 = 00F2			fadr	.ds 2
+    17 = 00F4			fhlp	.ds 2
+    18 = 00F6			regA	.ds 1
+    19 = 00F7			regX	.ds 1
+    20 = 00F8			regY	.ds 1
+    21
+    22 = 0028			WIDTH	= 40
+    23 = 001E			HEIGHT	= 30
+    24
+    25 = 0400			scroll_buffer = $0400
+    26
+    27 					opt f+h-
+    28
+    29 = D800			program = $d800
+    30
+    31 				; ---	MAIN PROGRAM
+    32 					org program
+    33
+    34 D800 4C F8 F6			jmp main
+    35 				;	jmp stop
+    36
+    37 D803 70			ant	dta $70
+    38 D804 44 00 F4 84 04 04 + 	dta $44,a(scr),$84,$04,$04,$04,$04,$04,$84,$84,$84,$04,$84,$04,$84,$04,$04
+    39
+    40 D816 C4 00 D9			dta $84+$40,a(scr2)
+    41 D819 84 04 84 84 04 84 + 	dta $84,$04,$84,$84,$04,$84,$04,$84
+    42
+    43 D821 D6				dta $46|$50|$80
+    44 D822 28 04		sadr	dta a(scroll_buffer+40)
+    45
+    46 D824 44 90 DA			dta $44,a(scr2+10*40)
+    47 D827 04				dta $04
+    48 D828 41 03 D8			dta $41,a(ant)
+    49
+    50 D82B				org program+$100
+    51
+    52 D900 B2 B2 B2 B2 B2 B2 + scr2	ins "bl09.scr",-480
+    53
+    54
+    55 DAE0				org program+$300
+    56
+    57 DB00			pmg	SPRITES
+Macro: SPRITES [Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm]
+     1 DB00			missiles
+     2 DB00 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+     3 DB10 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+     4 DB20 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+     5 DB30 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+     6 DB40 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+     7 DB50 30 30 30 30 30 30 + 	.he 30 30 30 30 30 30 30 30 30 30 30 30 30 30 30 30
+     8 DB60 30 30 00 00 00 00 + 	.he 30 30 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+     9 DB70 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    10 DB80 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    11 DB90 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    12 DBA0 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 0C 0C 0C
+    13 DBB0 0C 0C 0C 0C 0C 0C + 	.he 0C 0C 0C 0C 0C 0C 0C 0C 0C 0C 0C 0C 0C 0C 0C 0C
+    14 DBC0 0C 0C 00 00 00 00 + 	.he 0C 0C 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    15 DBD0 00 00 00 00 00 FF + 	.he 00 00 00 00 00 FF FF FF FF FF FF FF FF FF FF FF
+    16 DBE0 FF FF 00 00 00 00 + 	.he FF FF 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    17 DBF0 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    18 DC00			player0
+    19 DC00 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    20 DC10 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    21 DC20 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 FF FF FF FF FF FF FF FF FF
+    22 DC30 FF FF FF FF FF FF + 	.he FF FF FF FF FF FF FF FF FF FF FF FF FF FF EF FF
+    23 DC40 EF F7 DF 57 77 C7 + 	.he EF F7 DF 57 77 C7 00 00 00 00 00 00 00 00 00 00
+    24 DC50 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 FF FF FF FF FF FF FF
+    25 DC60 FF FF FF FF FF FF + 	.he FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF 00
+    26 DC70 00 00 FF FF FF FF + 	.he 00 00 FF FF FF FF FF FF FF FF FF FF FF FF FF FF
+    27 DC80 FF FF FF FF FF FF + 	.he FF FF FF FF FF FF FF FF F7 FF FF FF F7 FF FF EF
+    28 DC90 EB FF 00 00 00 00 + 	.he EB FF 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    29 DCA0 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 FF FF FF FF FF
+    30 DCB0 FF FF FF FF FF FF + 	.he FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF
+    31 DCC0 FF FF FF FF FF FF + 	.he FF FF FF FF FF FF 00 00 00 00 00 00 00 00 00 00
+    32 DCD0 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 FF FF FF FF FF FF FF FF FF FF
+    33 DCE0 FF FF 00 00 00 00 + 	.he FF FF 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    34 DCF0 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    35 DD00			player1
+    36 DD00 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    37 DD10 00 00 00 00 FF FF + 	.he 00 00 00 00 FF FF FF FF FF FF FF FF FF FF FF FF
+    38 DD20 FF FF FF FF FF FF + 	.he FF FF FF FF FF FF FF FF FF FF FF FE FF FF FE FF
+    39 DD30 FF FF FF F7 F7 F7 + 	.he FF FF FF F7 F7 F7 D7 D3 CB CB CB E3 00 00 00 00
+    40 DD40 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    41 DD50 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 E5 D5 F5 F7 FD
+    42 DD60 FF FF FF FF FF FF + 	.he FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF
+    43 DD70 FF FF FF FF FF FF + 	.he FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF
+    44 DD80 FF FF FF FF FF FF + 	.he FF FF FF FF FF FF FF FF 00 00 00 00 00 00 00 00
+    45 DD90 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    46 DDA0 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 FF FF FF FF
+    47 DDB0 FF FF FF FF FF FF + 	.he FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF
+    48 DDC0 FF FF FF FF FF 00 + 	.he FF FF FF FF FF 00 00 00 00 00 00 00 00 00 00 00
+    49 DDD0 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 FF FF FF FF FF FF FF FF FF FF
+    50 DDE0 FF FF 00 00 00 00 + 	.he FF FF 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    51 DDF0 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    52 DE00			player2
+    53 DE00 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    54 DE10 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    55 DE20 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    56 DE30 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    57 DE40 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 FF
+    58 DE50 FF FF FF FF FF FF + 	.he FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF
+    59 DE60 FF 00 00 00 00 00 + 	.he FF 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    60 DE70 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    61 DE80 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    62 DE90 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    63 DEA0 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 FF FF FF FF FF FF FF FF FF
+    64 DEB0 FF FF FF FF FF FF + 	.he FF FF FF FF FF FF FF FF FF 00 00 00 00 00 00 00
+    65 DEC0 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    66 DED0 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 FF FF FF FF FF FF FF FF FF FF
+    67 DEE0 FF FF 00 00 00 00 + 	.he FF FF 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    68 DEF0 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    69 DF00			player3
+    70 DF00 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    71 DF10 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    72 DF20 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    73 DF30 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    74 DF40 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    75 DF50 FC FC FC FC FC FC + 	.he FC FC FC FC FC FC FC FC FC FC FC FC FC FC FC FC
+    76 DF60 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    77 DF70 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    78 DF80 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    79 DF90 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    80 DFA0 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 FC FC FC FC FC FC FC FC
+    81 DFB0 FC FC FC FC FC FC + 	.he FC FC FC FC FC FC FC FC 00 00 00 00 00 00 00 00
+    82 DFC0 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    83 DFD0 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 FF FF FF FF FF FF FF FF FF FF
+    84 DFE0 FF FF 00 00 00 00 + 	.he FF FF 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    85 DFF0 00 00 00 00 00 00 + 	.he 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm
+    58
+    59 E000 FF FF FF FF FF FF + fnt	ins "bl09.fnt",0,4*1024+512
+    60
+    61 F200 00 00 00 00 00 00 + fntS	ins '..\scroll\text.fnt',0,512		; 64 znaki
+    62
+    63 F400 80 80 80 80 80 80 + scr	ins "bl09.scr",0,720
+    64
+    65
+    66 F6D0 00 00 00 00 00 00 + crd	ins "bl09.scr",25*40,40
+    67
+    68
+    69 F6F8 8D 1C FA		main	sta nmi.prc
+    70 F6FB 8C 1D FA			sty nmi.prc+1
+    71
+    72 F6FE AD FA FF			lda $fffa
+    73 F701 8D 79 F7			sta lnmi+1
+    74
+    75 F704 AD FB FF			lda $fffa+1
+    76 F707 8D 7E F7			sta hnmi+1
+    77
+    78 F70A AD 01 D3			lda portb
+    79 F70D 8D 83 F7			sta prtb+1
+    80
+    81 				; ---	init PMG
+    82
+    83 					ift USESPRITES
+    84 F710 A9 DB 8D 07 D4		mva >pmg pmbase		;missiles and players data address
+    85 F715 A9 03 8D 1D D0		mva #$03 pmcntl		;enable players and missiles
+    86 					eif
+    87
+    88 F71A A5 14 C5 14 F0 FC		lda:cmp:req $14		;wait 1 frame
+    89
+    90 F720 78				sei			;stop IRQ interrupts
+    91 F721 A9 00 8D 0E D4		mva #$00 nmien		;stop NMI interrupts
+    92 F726 8D 00 D4			sta dmactl
+    93 				;	mva #$fe portb		;switch off ROM to get 16k more ram
+    94
+    95 F729 A8				tay
+    96 F72A 99 00 04 C8 D0 FA		sta:rne scroll_buffer,y+
+    97
+    98
+    99 F730 A9 7C 8D FA FF A9 + 	mwa #NMI $fffa		;new NMI handler
+   100
+   101 F73A A9 C0 8D 0E D4		mva #$c0 nmien		;switch on NMI+DLI again
+   102
+   103 F73F AD 10 D0 F0 FB		lda:req trig0
+   104
+   105
+   106 F744 A5 14 C5 14 F0 FC	_lp	lda:cmp:req cloc
+   107
+   108 F74A 20 25 FA			jsr scroll
+   109
+   110 F74D AD 10 D0			lda trig0		; FIRE #0
+   111 F750 F0 13			beq stop
+   112
+   113 F752 AD 11 D0			lda trig1		; FIRE #1
+   114 F755 F0 0E			beq stop
+   115
+   116 F757 AD 1F D0			lda consol		; START
+   117 F75A 29 01			and #1
+   118 F75C F0 07			beq stop
+   119
+   120 F75E AD 0F D2			lda skctl
+   121 F761 29 04			and #$04
+   122 F763 D0 DF			bne _lp			;wait to press any key; here you can put any own routine
+   123
+   124 				;	rts
+   125
+   126 F765 A5 14 C5 14 F0 FC	stop	lda:cmp:req cloc
+   127
+   128 F76B A9 00 8D 1D D0		mva #$00 pmcntl		;PMG disabled
+   129
+   130 F770 A2 1E			ldx #$1e
+   131 F772 9D 00 D0 CA 10 FA		sta:rpl hposp0,x-
+   132
+   133 F778 A9 00		lnmi	lda #0
+   134 F77A 8D FA FF			sta $fffa
+   135
+   136 F77D A9 00		hnmi	lda #0
+   137 F77F 8D FB FF			sta $fffa+1
+   138
+   139 F782 A9 00		prtb	lda #0
+   140 F784 8D 01 D3			sta portb
+   141
+   142 F787 A9 40 8D 0E D4		mva #$40 nmien		;only NMI interrupts, DLI disabled
+   143 				;	cli			;IRQ enabled
+   144
+   145 F78C 60			_rts	rts			;return to ... DOS
+   146
+   147
+   148 				; ---	DLI PROGRAM
+   149
+   150 F78D			.local	DLI
+   151
+   152 = F78D				?old_dli = *
+   153
+   154 					ift !CHANGES
+   155
+   156 				dli1	lda trig0		; FIRE #0
+   157 					beq stop
+   158
+   159 					lda trig1		; FIRE #1
+   160 					beq stop
+   161
+   162 					lda consol		; START
+   163 					and #1
+   164 					beq stop
+   165
+   166 					lda skctl
+   167 					and #$04
+   168 					beq stop
+   169
+   170 					lda vcount
+   171 					cmp #$02
+   172 					bne dli1
+   173
+   174 					:3 sta wsync
+   175
+   176 					DLINEW dli9
+   177
+   178 					eif
+   179
+   180 F78D			dli_start
+   181
+   182 F78D			dli9
+   183 F78D 85 F6			sta regA
+   184
+   185 F78F 8D 0A D4			sta wsync		;line=24
+   186 F792 8D 0A D4			sta wsync		;line=25
+   187 F795 A9 EA		c9	lda #$EA
+   188 F797 8D 0A D4			sta wsync		;line=26
+   189 F79A 8D 13 D0			sta colpm1
+   190 F79D 8D 0A D4			sta wsync		;line=27
+   191 F7A0 8D 0A D4			sta wsync		;line=28
+   192 F7A3 A9 60		x7	lda #$60
+   193 F7A5 8D 0A D4			sta wsync		;line=29
+   194 F7A8 8D 01 D0			sta hposp1
+   195 F7AB				DLINEW DLI.dli2 1 0 0
+Macro: DLINEW [Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm]
+     1 F7AB A9 B3 8D 82 F9		mva <DLI.DLI2 NMI.dliv
+     7 F7B0 A5 F6			lda regA
+    18 F7B2 40				rti
+    20 = F7B3				.def ?old_dli = *
+Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm
+   196
+   197 F7B3			dli2
+   198 F7B3 85 F6			sta regA
+   199 F7B5 A9 E4			lda >fnt+$400*$01
+   200 F7B7 8D 0A D4			sta wsync		;line=72
+   201 F7BA 8D 09 D4			sta chbase
+   202 F7BD				DLINEW dli10 1 0 0
+Macro: DLINEW [Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm]
+     1 F7BD A9 C5 8D 82 F9		mva <DLI10 NMI.dliv
+     7 F7C2 A5 F6			lda regA
+    18 F7C4 40				rti
+    20 = F7C5				.def ?old_dli = *
+Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm
+   203
+   204 F7C5			dli10
+   205 F7C5 85 F6			sta regA
+   206
+   207 F7C7 8D 0A D4			sta wsync		;line=80
+   208 F7CA A9 5F		x8	lda #$5F
+   209 F7CC 8D 0A D4			sta wsync		;line=81
+   210 F7CF 8D 00 D0			sta hposp0
+   211 F7D2 8D 0A D4			sta wsync		;line=82
+   212 F7D5 A9 8B		x9	lda #$8B
+   213 F7D7 8D 0A D4			sta wsync		;line=83
+   214 F7DA 8D 01 D0			sta hposp1
+   215 F7DD				DLINEW dli11 1 0 0
+Macro: DLINEW [Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm]
+     1 F7DD A9 E5 8D 82 F9		mva <DLI11 NMI.dliv
+     7 F7E2 A5 F6			lda regA
+    18 F7E4 40				rti
+    20 = F7E5				.def ?old_dli = *
+Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm
+   216
+   217 F7E5			dli11
+   218 F7E5 85 F6			sta regA
+   219
+   220 F7E7 A9 0C		c10	lda #$0C
+   221 F7E9 8D 0A D4			sta wsync		;line=88
+   222 F7EC 8D 19 D0			sta color3
+   223 F7EF A9 26		c11	lda #$26
+   224 F7F1 8D 0A D4			sta wsync		;line=89
+   225 F7F4 8D 14 D0			sta colpm2
+   226 F7F7				DLINEW dli12 1 0 0
+Macro: DLINEW [Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm]
+     1 F7F7 A9 04 8D 82 F9		mva <DLI12 NMI.dliv
+     3 F7FC A9 F8 8D 83 F9		mva >DLI12 NMI.dliv+1
+     7 F801 A5 F6			lda regA
+    18 F803 40				rti
+    20 = F804				.def ?old_dli = *
+Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm
+   227
+   228 F804			dli12
+   229 F804 85 F6			sta regA
+   230 F806 86 F7			stx regX
+   231 F808 84 F8			sty regY
+   232
+   233 F80A 8D 0A D4			sta wsync		;line=104
+   234 F80D 8D 0A D4			sta wsync		;line=105
+   235 F810 A9 52		x10	lda #$52
+   236 F812 A2 08		c12	ldx #$08
+   237 F814 A0 18		c13	ldy #$18
+   238 F816 8D 0A D4			sta wsync		;line=106
+   239 F819 8D 00 D0			sta hposp0
+   240 F81C 8E 12 D0			stx colpm0
+   241 F81F 8C 13 D0			sty colpm1
+   242 F822 A9 7C		x11	lda #$7C
+   243 F824 A2 48		c14	ldx #$48
+   244 F826 8D 0A D4			sta wsync		;line=107
+   245 F829 8D 01 D0			sta hposp1
+   246 F82C 8E 13 D0			stx colpm1
+   247 F82F				DLINEW dli3 1 1 1
+Macro: DLINEW [Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm]
+     1 F82F A9 3B 8D 82 F9		mva <DLI3 NMI.dliv
+     7 F834 A5 F6			lda regA
+    11 F836 A6 F7			ldx regX
+    15 F838 A4 F8			ldy regY
+    18 F83A 40				rti
+    20 = F83B				.def ?old_dli = *
+Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm
+   248
+   249 F83B			dli3
+   250 F83B 85 F6			sta regA
+   251 F83D A9 E8			lda >fnt+$400*$02
+   252 F83F 8D 0A D4			sta wsync		;line=120
+   253 F842 8D 09 D4			sta chbase
+   254 F845				DLINEW dli13 1 0 0
+Macro: DLINEW [Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm]
+     1 F845 A9 4D 8D 82 F9		mva <DLI13 NMI.dliv
+     7 F84A A5 F6			lda regA
+    18 F84C 40				rti
+    20 = F84D				.def ?old_dli = *
+Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm
+   255
+   256 F84D			dli13
+   257 F84D 85 F6			sta regA
+   258
+   259 F84F A9 0E		c15	lda #$0E
+   260 F851 8D 0A D4			sta wsync		;line=144
+   261 F854 8D 19 D0			sta color3
+   262 F857				DLINEW dli14 1 0 0
+Macro: DLINEW [Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm]
+     1 F857 A9 5F 8D 82 F9		mva <DLI14 NMI.dliv
+     7 F85C A5 F6			lda regA
+    18 F85E 40				rti
+    20 = F85F				.def ?old_dli = *
+Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm
+   263
+   264 F85F			dli14
+   265 F85F 85 F6			sta regA
+   266 F861 86 F7			stx regX
+   267
+   268 F863 8D 0A D4			sta wsync		;line=152
+   269 F866 8D 0A D4			sta wsync		;line=153
+   270 F869 8D 0A D4			sta wsync		;line=154
+   271 F86C 8D 0A D4			sta wsync		;line=155
+   272 F86F 8D 0A D4			sta wsync		;line=156
+   273 F872 8D 0A D4			sta wsync		;line=157
+   274 F875 8D 0A D4			sta wsync		;line=158
+   275 F878 A9 B0		x12	lda #$B0
+   276 F87A A2 1C		c16	ldx #$1C
+   277 F87C 8D 0A D4			sta wsync		;line=159
+   278 F87F 8D 02 D0			sta hposp2
+   279 F882 8E 14 D0			stx colpm2
+   280 F885 A9 EC			lda >fnt+$400*$03
+   281 F887 A2 1C		c17	ldx #$1C
+   282 F889 8D 0A D4			sta wsync		;line=160
+   283 F88C 8D 09 D4			sta chbase
+   284 F88F 8E 15 D0			stx colpm3
+   285 F892 8D 0A D4			sta wsync		;line=161
+   286 F895 8D 0A D4			sta wsync		;line=162
+   287 F898 A9 7C		x13	lda #$7C
+   288 F89A 8D 0A D4			sta wsync		;line=163
+   289 F89D 8D 00 D0			sta hposp0
+   290 F8A0 A9 58		x14	lda #$58
+   291 F8A2 8D 0A D4			sta wsync		;line=164
+   292 F8A5 8D 01 D0			sta hposp1
+   293 F8A8 A9 0C		s5	lda #$0C
+   294 F8AA 8D 0A D4			sta wsync		;line=165
+   295 F8AD 8D 0C D0			sta sizem
+   296 F8B0				DLINEW dli15 1 1 0
+Macro: DLINEW [Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm]
+     1 F8B0 A9 BA 8D 82 F9		mva <DLI15 NMI.dliv
+     7 F8B5 A5 F6			lda regA
+    11 F8B7 A6 F7			ldx regX
+    18 F8B9 40				rti
+    20 = F8BA				.def ?old_dli = *
+Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm
+   297
+   298 F8BA			dli15
+   299 F8BA 85 F6			sta regA
+   300
+   301 F8BC A9 1C		c18	lda #$1C
+   302 F8BE 8D 0A D4			sta wsync		;line=168
+   303 F8C1 8D 17 D0			sta color1
+   304 F8C4				DLINEW dli16 1 0 0
+Macro: DLINEW [Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm]
+     1 F8C4 A9 CC 8D 82 F9		mva <DLI16 NMI.dliv
+     7 F8C9 A5 F6			lda regA
+    18 F8CB 40				rti
+    20 = F8CC				.def ?old_dli = *
+Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm
+   305
+   306 F8CC			dli16
+   307 F8CC 85 F6			sta regA
+   308
+   309 F8CE A9 0A		c19	lda #$0A
+   310 F8D0 8D 0A D4			sta wsync		;line=176
+   311 F8D3 8D 19 D0			sta color3
+   312 F8D6				DLINEW dli4 1 0 0
+Macro: DLINEW [Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm]
+     1 F8D6 A9 DE 8D 82 F9		mva <DLI4 NMI.dliv
+     7 F8DB A5 F6			lda regA
+    18 F8DD 40				rti
+    20 = F8DE				.def ?old_dli = *
+Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm
+   313
+   314 F8DE			dli4
+   315 F8DE 85 F6			sta regA
+   316 F8E0 A9 E0			lda >fnt+$400*$00
+   317 F8E2 8D 0A D4			sta wsync		;line=192
+   318 F8E5 8D 09 D4			sta chbase
+   319 F8E8 8D 0A D4			sta wsync		;line=193
+   320 F8EB 8D 0A D4			sta wsync		;line=194
+   321 F8EE 8D 0A D4			sta wsync		;line=195
+   322 F8F1 A9 1A		c20	lda #$1A
+   323 F8F3 8D 0A D4			sta wsync		;line=196
+   324 F8F6 8D 16 D0			sta color0
+   325
+   326 F8F9 A9 1A			lda #$1a
+   327 F8FB 8D 12 D0			sta colpm0
+   328 F8FE 8D 13 D0			sta colpm1
+   329 F901 8D 14 D0			sta colpm2
+   330 F904 8D 15 D0			sta colpm3
+   331
+   332 F907 A9 B0			lda #48+128
+   333 F909 8D 04 D0			sta hposm0
+   334 F90C A9 B8			lda #48+128+8
+   335 F90E 8D 05 D0			sta hposm1
+   336 F911 A9 C0			lda #48+128+16
+   337 F913 8D 06 D0			sta hposm2
+   338 F916 A9 C8			lda #48+128+24
+   339 F918 8D 07 D0			sta hposm3
+   340
+   341 F91B A9 FF			lda #$ff
+   342 F91D 8D 0C D0			sta sizem
+   343
+   344 F920 A9 0E			lda #14
+   345 F922 8D 18 D0			sta color2
+   346
+   347 F925				DLINEW dli5 1 0 0
+Macro: DLINEW [Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm]
+     1 F925 A9 32 8D 82 F9		mva <DLI5 NMI.dliv
+     3 F92A A9 F9 8D 83 F9		mva >DLI5 NMI.dliv+1
+     7 F92F A5 F6			lda regA
+    18 F931 40				rti
+    20 = F932				.def ?old_dli = *
+Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm
+   348
+   349
+   350 				// scroll
+   351
+   352 F932			dli5
+   353 F932 85 F6			sta regA
+   354 F934 86 F7			stx regX
+   355 F936 A9 F2			lda >fntS
+   356 F938 A2 00		c21	ldx #$00
+   357 F93A 8D 0A D4			sta wsync		;line=208
+   358 F93D 8D 09 D4			sta chbase
+   359 F940 8E 16 D0			stx color0
+   360
+   361 F943 A9 30			lda #48
+   362 F945 8D 00 D0			sta hposp0
+   363 F948 A9 50			lda #48+32
+   364 F94A 8D 01 D0			sta hposp1
+   365 F94D A9 70			lda #48+64
+   366 F94F 8D 02 D0			sta hposp2
+   367 F952 A9 90			lda #48+96
+   368 F954 8D 03 D0			sta hposp3
+   369
+   370 F957				DLINEW dli6 1 1 0
+Macro: DLINEW [Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm]
+     1 F957 A9 61 8D 82 F9		mva <DLI6 NMI.dliv
+     7 F95C A5 F6			lda regA
+    11 F95E A6 F7			ldx regX
+    18 F960 40				rti
+    20 = F961				.def ?old_dli = *
+Source: D:\!Atari\GAME Development\TetrisAttack\assets\title\bl09.asm
+   371
+   372
+   373 F961			dli6
+   374 F961 85 F6			sta regA
+   375 F963 86 F7			stx regX
+   376 F965 A9 F0			lda >fnt+$400*$04
+   377 F967 A2 08		c22	ldx #$08
+   378 F969 8D 0A D4			sta wsync		;line=216
+   379 F96C 8D 09 D4			sta chbase
+   380 F96F 8E 19 D0			stx color3
+   381
+   382 F972 A9 1A			lda #$1a
+   383 F974 8D 16 D0			sta color0
+   384
+   385 F977 A5 F6			lda regA
+   386 F979 A6 F7			ldx regX
+   387 F97B 40				rti
+   388
+   389 				.endl
+   390
+   391 				; ---
+   392
+   393 = 0001			CHANGES = 1
+   394 = 0000			FADECHR	= 0
+   395
+   396 = 007F			SCHR	= 127
+   397
+   398 				; ---
+   399
+   400 F97C			.proc	NMI
+   401
+   402 F97C 2C 0F D4			bit nmist
+   403 F97F 10 03			bpl VBL
+   404
+   405 F981 4C 8D F7			jmp DLI.dli_start
+   406 = F982			dliv	equ *-2
+   407
+   408 F984			VBL
+   409 F984 85 F6			sta regA
+   410 F986 86 F7			stx regX
+   411 F988 84 F8			sty regY
+   412
+   413 F98A 8D 0F D4			sta nmist		;reset NMI flag
+   414
+   415 F98D A9 03 8D 02 D4 A9 + 	mwa #ant dlptr		;ANTIC address program
+   416
+   417 F997 A9 3E 8D 00 D4		mva #@dmactl(standard|dma|lineX1|players|missiles) dmactl	;set new screen width
+   418
+   419 F99C E6 14			inc cloc		;little timer
+   420
+   421 				; Initial values
+   422
+   423 F99E A9 E0			lda >fnt+$400*$00
+   424 F9A0 8D 09 D4			sta chbase
+   425
+   426 F9A3 A9 0E		c0	lda #$0E
+   427 F9A5 8D 1A D0			sta colbak
+   428 F9A8 A9 02			lda #$02
+   429 F9AA 8D 01 D4			sta chrctl
+   430 F9AD A9 04			lda #$04
+   431 F9AF 8D 1B D0			sta gtictl
+   432 F9B2 A9 28		c1	lda #$28
+   433 F9B4 8D 16 D0			sta color0
+   434 F9B7 A9 1A		c2	lda #$1A
+   435 F9B9 8D 17 D0			sta color1
+   436 F9BC A9 34		c3	lda #$34
+   437 F9BE 8D 18 D0			sta color2
+   438 F9C1 A9 0A		c4	lda #$0A
+   439 F9C3 8D 19 D0			sta color3
+   440 F9C6 A9 61		x0	lda #$61
+   441 F9C8 8D 01 D0			sta hposp1
+   442 F9CB A9 DA		c5	lda #$DA
+   443 F9CD 8D 13 D0			sta colpm1
+   444 F9D0 A9 8B		x1	lda #$8B
+   445 F9D2 8D 00 D0			sta hposp0
+   446 F9D5 A9 2A		c6	lda #$2A
+   447 F9D7 8D 12 D0			sta colpm0
+   448
+   449 F9DA A9 03		s2	lda #$03
+   450 F9DC 8D 08 D0			sta sizep0
+   451 F9DF 8D 09 D0			sta sizep1
+   452 F9E2 8D 0A D0			sta sizep2
+   453 F9E5 8D 0B D0			sta sizep3
+   454
+   455 F9E8 A9 AC		x2	lda #$AC
+   456 F9EA 8D 02 D0			sta hposp2
+   457
+   458 F9ED A9 0C		c7	lda #$0C
+   459 F9EF 8D 14 D0			sta colpm2
+   460 F9F2 8D 15 D0			sta colpm3
+   461
+   462
+   463 F9F5 A9 10		s4	lda #$10
+   464 F9F7 8D 0C D0			sta sizem
+   465 F9FA A9 30		x3	lda #$30
+   466 F9FC 8D 03 D0			sta hposp3
+   467 F9FF A9 CC		x4	lda #$CC
+   468 FA01 8D 06 D0			sta hposm2
+   469 FA04 A9 B0		x5	lda #$B0
+   470 FA06 8D 05 D0			sta hposm1
+   471
+   472 FA09 A9 00		x6	lda #$00
+   473 FA0B 8D 04 D0			sta hposm0
+   474 FA0E 8D 07 D0			sta hposm3
+   475
+   476 FA11 A9 8D 8D 82 F9 A9 + 	mwa #DLI.dli_start dliv	;set the first address of DLI interrupt
+   477
+   478 				;this area is for yours routines
+   479
+   480 FA1B 20 8C F7			jsr prc: _rts
+   481
+   482 FA1E			quit
+   483 FA1E A5 F6			lda regA
+   484 FA20 A6 F7			ldx regX
+   485 FA22 A4 F8			ldy regY
+   486 FA24 40				rti
+   487
+   488 				.endp
+   489
+   490
+   491
+   492 FA25			.local	scroll
+   493
+   494 FA25 AD 62 FA			lda hsc
+   495 FA28 D0 34			bne toEnd
+   496
+   497 FA2A A9 08			lda #8
+   498 FA2C 8D 62 FA			sta hsc
+   499
+   500 FA2F AC 22 D8			ldy sadr
+   501 FA32 AD 67 FA			lda txtadr: text
+   502 FA35 C9 9B			cmp #$9b
+   503 FA37 D0 0D			bne skp
+   504
+   505 FA39 A9 67 8D 33 FA A9 + 	mwa #text txtadr
+   506 FA43 AD 67 FA			lda text
+   507
+   508 FA46 99 00 04		skp	sta scroll_buffer,y
+   509 FA49 99 30 04			sta scroll_buffer+48,y
+   510
+   511 FA4C C8				iny
+   512 FA4D C0 30			cpy #48
+   513 FA4F D0 02			sne
+   514 FA51 A0 00			ldy #0
+   515 FA53 8C 22 D8			sty sadr
+   516
+   517 FA56 EE 33 FA D0 03 EE + 	inw txtadr
+   518
+   519 FA5E CE 62 FA		toEnd	dec hsc
+   520
+   521 FA61 A9 08			lda hsc: #8
+   522 FA63 8D 04 D4			sta hscrol
+   523
+   524 FA66 60				rts
+   525
+   526 FA67 8E B1 B4 A8 B0 00 + text	ins '..\scroll\text.scr',160,12*40	; omijamy 4 pierwsze wiersz
+   527
+   528 FC47 9B				dta $9b
+   529
+   530 				.endl
+   531
+   532 				; ---
+   533 				;	run main
+   534 				; ---
+   535
