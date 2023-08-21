@@ -34,4 +34,3 @@ requirements:
 - 6502 Classic (1.76 MHz)
 - TV PAL
 - POKEY STEREO
-- 
