@@ -2,7 +2,7 @@
 
 https://demozoo.org/productions/325906/
 
-mp.exe block_attack.pas -ipath:[mad_pascal_path]\lib\ -code:980
+    mp.exe block_attack.pas -ipath:[mad_pascal_path]\lib\ -code:980
 
 based on: Tetris Attack, https://www.gameshaha.net/classic-tetris-attack/
 
